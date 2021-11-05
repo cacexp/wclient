@@ -2,7 +2,7 @@
 
 `wclient` is lightweigh HTTP client inspired in [Python Requests](https://docs.python-requests.org/en/latest/) and written in Rust.
 
-This is the first MVP implementation supporting only HTTP just to test the API and the its viability.
+This is the first MVP implementation supporting HTTP and basic HTTPS just to test the API and the its viability.
 
 [How to run the tests](testing.md).
 

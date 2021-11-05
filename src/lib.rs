@@ -22,8 +22,10 @@
 //! # Features
 //! * HTTP 1.1 Request and Response over plain TCP/IP
 //! * HTTP 1.1 Single Body
+//! * HTTPS (v1.1) with default site certificate verification (only with host CA certificates)
 //! # Future Features
-//! * HTTPS (v1.1)
+//! * HTTPS client certification authentication
+//! * HTTPS custom site certificate validation
 //! * Multipart
 //! * HTTP Session with Cookie Jar
 //! * HTTP Connection pooling
