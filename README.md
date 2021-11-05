@@ -4,6 +4,8 @@
 
 This is the first MVP implementation supporting only HTTP just to test the API and the its viability.
 
+[How to run the tests](testing.md).
+
 # Contributions
 
 This development is in an early stage. I appreciate you interest and welcome any comment, bug, idea, etc.
