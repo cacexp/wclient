@@ -17,6 +17,7 @@
 /// HTTP Transport Implementation
 mod transport;
 
+use crate::http::transport::TlsTransport;
 use std::result::Result;
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
@@ -132,11 +133,9 @@ impl ClientConnection  {
 
         let bytes = buffer.into_inner().unwrap();
 
-        let mut writer = self.transport.writer()?;
+        self.transport.write(bytes.as_slice())?;
 
-        writer.write(bytes.as_slice())?;
-
-        writer.flush()?;
+        self.transport.flush()?;
 
         if log_enabled!(Level::Debug) {
             let string = String::from_utf8(bytes).unwrap();
@@ -217,9 +216,7 @@ impl ClientConnection  {
         
         let mut line = String::new();
 
-        // let mut buffer = BufReader::new(self.socket.try_clone().unwrap());
-
-        let mut buffer = BufReader::new(self.transport.reader()?);
+        let mut buffer = BufReader::new(self.transport.as_mut());
         buffer.read_line(&mut line)?;
 
         if line.len() == 0 {
@@ -246,7 +243,6 @@ impl ClientConnection  {
                     let trimmed = line.trim();
 
                     if trimmed.is_empty() { // end of headers
-                        debug!("End of Headers");
                         break;
                     }
 
@@ -366,7 +362,7 @@ impl ClientConnectionFactory {
         if end_point.scheme ==  HttpScheme::HTTP {
             Ok(Box::new(TcpTransport::open(&end_point.host, end_point.port, config)?))
         } else {
-            Err(Error::new(ErrorKind::Other, "Not Implemented"))
+            Ok(Box::new(TlsTransport::open(&end_point.host, end_point.port, config)?))
         }
     }
 

@@ -116,7 +116,22 @@ fn build_request_2() {
 
 #[test]
 fn test_url_ok1() {
+    assert_eq!(parse_url("http://web.myservice.com/user").is_ok(), true);
+}
+
+#[test]
+fn test_url_ok2() {
     assert_eq!(parse_url("Http://web.myservice.com/user").is_ok(), true);
+} 
+
+#[test]
+fn test_url_ok3() {
+    assert_eq!(parse_url("HTTP://WEB.MYSERVICE.COM/user").is_ok(), true);
+} 
+
+#[test]
+fn test_url_ok4() {
+    assert_eq!(parse_url("https://web.myservice.com/user").is_ok(), true);
 }
 
 #[test]
@@ -206,5 +221,47 @@ fn test_ip() {
     assert!(result_data.has_key("status"));
     assert_eq!(result_data["status"], "success");
     assert_eq!(result_data.has_key("query"), true);
+
+}
+
+#[test]
+fn test_https() {
+
+    init();
+    let result = RequestBuilder::get("https://www.boredapi.com/api/activity")
+        .header(ACCEPT, CONTENT_TYPE_JSON)
+        .param("participants", "2")
+        .build()
+        .send();
+
+
+    if let Some(e) = result.as_ref().err(){
+        println!("{}", e);
+    }
+
+    assert!(result.is_ok());
+
+    let response = result.unwrap();
+
+    assert_eq!(response.status_code, 200);
+
+    let body = String::from_utf8(response.body().clone());
+
+    assert!(body.is_ok());
+
+    assert_eq!(response.headers()[CONTENT_TYPE], "application/json; charset=utf-8");
+
+    let result_json = response.json();
+
+    if let Some(e) = result_json.as_ref().err(){
+        println!("{}", e);
+    }
+
+    assert!(result_json.is_ok());
+
+    let result_data = result_json.unwrap();
+
+    assert!(result_data.has_key("activity"));
+  
 
 }
