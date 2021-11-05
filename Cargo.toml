@@ -8,6 +8,7 @@ readme="README.md"
 description = "wclient is a lightweight HTTP client library written in Rust."
 homepage = "https://github.com/cacexp/wclient"
 repository = "https://github.com/cacexp/wclient"
+documentation = "https://docs.rs/wclient/0.1.0/wclient/"
 categories = ["network-programming", "web-programming::http-client"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
