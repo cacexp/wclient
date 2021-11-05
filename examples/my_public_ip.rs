@@ -6,7 +6,7 @@ pub fn main() {
 
     // Request builder and send method
     let result = RequestBuilder::get("http://ip-api.com/json/")
-        .header("Accept", "Content-Type: application/json")
+        .header("Accept", "application/json")
         .param("fields", "24576")
         .build()
         .send();
@@ -21,6 +21,7 @@ pub fn main() {
 
     assert_eq!(response.status_code(), 200);
 
+    assert_eq!(response.headers()["Content-Type"], "application/json");
     let result_json = response.json();
 
     if let Some(e) = result_json.as_ref().err(){
@@ -28,6 +29,7 @@ pub fn main() {
     }
 
     let result_data = result_json.unwrap();
+
 
     assert!(result_data.has_key("status"));
     assert_eq!(result_data["status"], "success");

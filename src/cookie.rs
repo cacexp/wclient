@@ -50,11 +50,13 @@ impl FromStr for SameSiteValue {
     }
 }
 
-/// Represents a cookie created from `Set-Cookie` response header. A `Cookie` can be parsed from the `Set-Cookie` value 
-/// from an HTTP `Response` using the trait `FromStr`:
-/// `let cookie = Cookie::from_str("id=a3fWa; Expires=Wed, 21 Oct 2022 07:28:00 GMT");`
+/// Represents a cookie created from `Set-Cookie` response header. 
 /// 
-/// See [Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) for more information
+/// A `Cookie` can be parsed from the `Set-Cookie` value from an HTTP `Response` using the trait `FromStr`:
+///
+///  `let cookie = Cookie::from_str("id=a3fWa; Expires=Wed, 21 Oct 2022 07:28:00 GMT");`
+/// 
+/// See [Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) for more information.
 
 pub struct Cookie {
     /// Cookie name

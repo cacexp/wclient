@@ -468,12 +468,12 @@ impl Response {
     }
 
     /// Get Response Headers.
-    pub fn headers(&mut self) -> &HashMap<String, String> {
+    pub fn headers(&self) -> &HashMap<String, String> {
         &self.headers
     }
 
     /// Get Request Cookies.
-    pub fn cookie(&mut self) -> &SetCookies {
+    pub fn cookie(&self) -> &SetCookies {
         &self.cookies
     }
 

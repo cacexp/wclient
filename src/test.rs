@@ -191,6 +191,8 @@ fn test_ip() {
 
     assert_eq!(response.status_code, 200);
 
+    assert_eq!(response.headers()[CONTENT_TYPE], "application/json; charset=utf-8");
+
     let result_json = response.json();
 
     if let Some(e) = result_json.as_ref().err(){
