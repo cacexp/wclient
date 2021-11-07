@@ -1,3 +1,4 @@
+/// Helper functions to configure [rustls](https://crates.io/crates/rustls)
 use std::sync::Arc;
 use rustls;
 use std::path::Path;
@@ -8,6 +9,7 @@ use rustls::RootCertStore;
 use std::fs;
 use std::io::Error;
 
+/// Internal module to disable server certificate verification
 #[cfg(feature = "dangerous_configuration")]
 mod danger {
 
