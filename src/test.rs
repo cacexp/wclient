@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
 use crate::*;
+use crate::config::*;
 use crate::http::parse_url;
 use crate::constants::*;
 use json::*;
@@ -224,17 +226,18 @@ fn test_ip() {
 
 }
 
-#[test]
-fn test_https() {
+use std::result::Result;
 
-    init();
-    let result = RequestBuilder::get("https://www.boredapi.com/api/activity")
+fn request_boreapy_with_config(config: &HttpConfig) -> Result<Response, crate::Error> {
+    return RequestBuilder::get("https://www.boredapi.com/api/activity")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .param("participants", "2")
-        .build()
+        .config(&config)
+        .build()        
         .send();
+}
 
-
+fn http_boreapy_ok(result: Result<Response, crate::Error>) {
     if let Some(e) = result.as_ref().err(){
         println!("{}", e);
     }
@@ -262,6 +265,113 @@ fn test_https() {
     let result_data = result_json.unwrap();
 
     assert!(result_data.has_key("activity"));
+
+}
+
+#[test]
+fn test_https_default() {
+
+    init();
+
+    let config = HttpConfigBuilder::default().build();
+
+    let result = request_boreapy_with_config(&config);
+
+    http_boreapy_ok(result);
+  
+
+}
+
+#[test]
+fn test_https_custom_server_ca() {
+
+    init();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("test_resources/server_certs");
+
+    let config = HttpConfigBuilder::default()
+        .verify(HttpsVerify::Path(String::from(path.as_path().to_str().unwrap())))
+        .build();
+
+    let result = request_boreapy_with_config(&config);
+
+    http_boreapy_ok(result);
+
+}
+
+#[test]
+fn test_https_custom_server_ca_file() {
+
+    init();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("test_resources/server_certs/lets-encrypt-r3.pem");
+
+    let config = HttpConfigBuilder::default()
+        .verify(HttpsVerify::Path(String::from(path.as_path().to_str().unwrap())))
+        .build();
+
+    let result = request_boreapy_with_config(&config);
+
+    http_boreapy_ok(result);
+
+}
+
+#[test]
+fn test_https_wrong_server_ca() {
+
+    init();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("test_resources/wrong_server_certs");
+
+    let config = HttpConfigBuilder::default()
+        .verify(HttpsVerify::Path(String::from(path.as_path().to_str().unwrap())))
+        .build();
+
+    let result = request_boreapy_with_config(&config);
+
+    assert!(result.is_err());
+    
+    println!("{}", result.err().unwrap());
+
+}
+
+#[test]
+fn test_https_wrong_server_ca_file() {
+
+    init();
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("test_resources/wrong_server_certs/DigiCertAssuredIDRootCA.crt.pem");
+
+    let config = HttpConfigBuilder::default()
+        .verify(HttpsVerify::Path(String::from(path.as_path().to_str().unwrap())))
+        .build();
+
+    let result = request_boreapy_with_config(&config);
+
+    assert!(result.is_err());
+    
+    println!("{}", result.err().unwrap());
+
+}
+
+
+#[test]
+#[cfg(feature = "dangerous_configuration")]
+fn test_https_no_verify() {
+
+    init();
+
+    let config = HttpConfigBuilder::default()
+        .verify(HttpsVerify::False)
+        .build();
+
+    let result = request_boreapy_with_config(&config);
+
+    http_boreapy_ok(result);
   
 
 }

@@ -23,9 +23,10 @@
 //! * HTTP 1.1 Request and Response over plain TCP/IP
 //! * HTTP 1.1 Single Body
 //! * HTTPS (v1.1) with default site certificate verification (only with host CA certificates)
+//! * HTTPS custom site certificate validation (local directory or certificate chain) in *.pem format
+//!
 //! # Future Features
 //! * HTTPS client certification authentication
-//! * HTTPS custom site certificate validation
 //! * Multipart
 //! * HTTP Session with Cookie Jar
 //! * HTTP Connection pooling
@@ -94,6 +95,27 @@
 //! ``` 
 //! 
 //! After, created, the `send` function sends the request message to the target URL and returns a `Result<Response, Error>` value.
+//!  ## HTTP Connection configuration
+//! 
+//! The `RequestBuilder` has a function to set a [HttpConfig](crate::config::HttpConfig). Currently, it can be configured:
+//! * The Root CA certificates to authenticate the server with HTTPS, see [HttpsVerify](crate::config::HttpsVerify)
+//! 
+//! For example:
+//! 
+//! ```no_run
+//! 
+//! use wclient::RequestBuilder;
+//! use wclient::config::{HttpsVerify, HttpConfigBuilder};
+//! 
+//! let config = HttpConfigBuilder::default()
+//!    .verify(HttpsVerify::Path(String::from("./config/server.pem")))
+//!    .build();
+//! 
+//! let request = RequestBuilder::get("https://web.myservice.com/user")
+//!     .header("Accept", "application/json")
+//!     .config(&config);
+//! 
+//! ```
 //! 
 #![allow(dead_code)]
 
@@ -302,8 +324,8 @@ impl RequestBuilder {
 
 
     /// Sets the `Request` configuration
-    pub fn config( mut self, data: HttpConfig) -> RequestBuilder {
-        self.config = data;
+    pub fn config( mut self, data: &HttpConfig) -> RequestBuilder {
+        self.config = data.clone();
         self
     }
 

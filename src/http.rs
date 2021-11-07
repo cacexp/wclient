@@ -13,9 +13,11 @@
 // limitations under the License.
 
 //! HTTP Protocol Implementation
-//! 
-/// HTTP Transport Implementation
+//!
+
 mod transport;
+
+mod rustls;
 
 use crate::http::transport::TlsTransport;
 use std::result::Result;

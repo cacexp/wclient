@@ -10,6 +10,9 @@ homepage = "https://github.com/cacexp/wclient"
 repository = "https://github.com/cacexp/wclient"
 documentation = "https://docs.rs/wclient/0.1.1/wclient/"
 categories = ["network-programming", "web-programming::http-client"]
+autoexamples = false
+# Ignore files used in tests
+exclude = ["/test_resources"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,7 +23,11 @@ url = "2.2.2"
 json = "0.12.4"
 case_insensitive_hashmap = "1.0.0"
 rustls = "0.20.0"
-webpki-roots = "0.22.0"
+rustls-native-certs = "0.6.1"
+rustls-pemfile = "0.2.1"
 
 [dev-dependencies]
 env_logger = "0.8.4"
+
+[features]
+dangerous_configuration = ["rustls/dangerous_configuration"]

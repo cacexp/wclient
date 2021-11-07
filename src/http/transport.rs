@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! HTTP transport implementation
+
+
 use std::io::IoSlice;
-use rustls::OwnedTrustAnchor;
-use rustls::RootCertStore;
-use webpki_roots;
-use std::sync::Arc;
 use crate::config::HttpConfig;
+use crate::http::rustls::make_rustls_config;
 use std::io::{Write, Read, Error, ErrorKind};
 use std::net::{TcpStream, Shutdown};
 use log::*;
-
 
 /// Base trait for [ClientConnection](crate::http::ClientConnection) , it will be implemented for HTTP and HTTPS
 pub (crate) trait Transport : Write + Read {
@@ -120,33 +119,19 @@ pub (crate) struct TlsTransport {
     tls: rustls::ClientConnection
 }
 
+
 impl TlsTransport {
     pub (crate) fn open(host: &str, port: u16, config: &HttpConfig) -> Result<Self, Error> {
         let transport = TcpTransport::open(host, port, config)?;
-        let mut root_store = RootCertStore::empty();
-        root_store.add_server_trust_anchors(
-            webpki_roots::TLS_SERVER_ROOTS
-                .0
-                .iter()
-                .map(|ta| {
-                    OwnedTrustAnchor::from_subject_spki_name_constraints(
-                        ta.subject,
-                        ta.spki,
-                        ta.name_constraints,
-                    )
-                }),
-        );
-        let rustls_config = rustls::ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+        
+        let rustls_config = make_rustls_config(config)?;
 
         let dns_name = rustls::ServerName::try_from(host);
 
         if dns_name.is_err() {
             return Err(Error::new(ErrorKind::InvalidData, "Invalid DNS name"));
         }
-        let tls_conn = rustls::ClientConnection::new(Arc::new(rustls_config), dns_name.unwrap());
+        let tls_conn = rustls::ClientConnection::new(rustls_config, dns_name.unwrap());
 
         if tls_conn.is_err() {
             return Err(Error::new(ErrorKind::InvalidData, "Cannot create TLS"));

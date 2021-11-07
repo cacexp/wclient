@@ -4,7 +4,15 @@
 
 This is the first MVP implementation supporting HTTP and basic HTTPS just to test the API and the its viability.
 
-[How to run the tests](testing.md).
+[How to run the tests](testing.md)
+
+'wclient' uses:
+*[rustls](https://crates.io/crates/rustls)
+*[json](https://crates.io/crates/json)
+*[url](https://crates.io/crates/url)
+*[log](https://crates.io/crates/log)
+*[chrono](https://crates.io/crates/chrono)
+*[case_insensitive_hashmap](https://crates.io/crates/case_insensitive_hashmap)
 
 # Contributions
 

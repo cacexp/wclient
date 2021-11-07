@@ -20,35 +20,61 @@
 
 use std::time::Duration;
 
+/// HTTPS Configuration to verify server's certificate
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum HttpsVerify {
+    /// Verify using default CA bundle (default value)
+    True,
+    /// Do not verify server's certificate. **WARNING**: this value is not recommended and it generate a `panic!` 
+    /// if feature `dangerous_configuration` is not set
+    False,    
+    /// Verify server's certificate against local CA in path, this can be a single file or a directory containing CA certificates in 
+    /// [PEM format](https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail)
+    Path(String)
+}
+
+
 /// HTTP Configuration
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HttpConfig {
     /// Connecton, write and read timeout for a TCP socket
-    pub timeout: Option<Duration>
+    pub timeout: Option<Duration>,
+    /// Directory or file path with trusted CA certificates
+    pub verify: HttpsVerify
 }
 
 /// `HttpConfig` helper builder
 pub struct HttpConfigBuilder {
-    pub timeout: Option<Duration>
+    timeout: Option<Duration>,
+    verify: HttpsVerify 
 }
 
 impl HttpConfigBuilder {
     pub fn default() -> HttpConfigBuilder {
         HttpConfigBuilder{
-            timeout: None
+            timeout: None,
+            verify: HttpsVerify::True
         }
     }
 
     /// Sets the connection, write and read timeout for a TCP socket
-    pub fn timeout(mut self, duration: Duration) -> HttpConfigBuilder {
-        self.timeout = Some(duration);
+    pub fn timeout(mut self, value: Duration) -> HttpConfigBuilder {
+        self.timeout = Some(value);
         self
     }
+
+    /// Sets how to verify HTTPS server certificate
+    pub fn verify(mut self, value: HttpsVerify) -> HttpConfigBuilder {
+        self.verify = value;
+        self
+    }
+
 
     /// Builder function ofor HttpConfig
     pub fn build(self) -> HttpConfig {
         HttpConfig{
-            timeout: self.timeout
+            timeout: self.timeout,
+            verify: self.verify
         }
     }
 }
