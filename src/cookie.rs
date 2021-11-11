@@ -14,8 +14,8 @@
 
 use std::str::FromStr;
 use std::io::{Error, ErrorKind};
-use chrono::{DateTime, FixedOffset, Utc};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use httpdate::parse_http_date;
+use std::time::{Duration, SystemTime};
 use std::ops::Add;
 
 pub(crate) const COOKIE: &str = "cookie";
@@ -202,34 +202,29 @@ impl FromStr for CookieDirective {
     fn from_str(s: &str) -> Result<CookieDirective,Error> {
         if let Some(index) = s.find('=') { // Cookie param with value
             let key = s[0..index].trim().to_ascii_lowercase();
-            let value = s[index + 1..].trim().to_ascii_lowercase(); // directives are case insensitive, always get on lowercase
+            let value = s[index + 1..].trim();
             return match key.as_str() {
                 COOKIE_EXPIRES => {
-                    let dt = DateTime::parse_from_rfc2822(value.as_str())
-                        .or_else(|e| -> Result<DateTime<FixedOffset>, Error> {
-                            Err(Error::new(ErrorKind::InvalidData, e))
-                        })?;
-                    let gmt_time : DateTime<Utc> = DateTime::from(dt);
-                    let millis = gmt_time.timestamp_millis() as u64;
-                    let expires = Duration::from_millis(millis);
-                    Ok(CookieDirective::Expires(UNIX_EPOCH.clone().add(expires)))
+                    let expires = parse_http_date(value).or_else (|_| Err(Error::new(ErrorKind::InvalidData, format!("Invalid date: {}", s))))?;                    
+                    Ok(CookieDirective::Expires(expires))
                 },
                 COOKIE_MAX_AGE => {  // Max-age value in seconds
-                    let digit = u64::from_str(value.as_str())
+                    let digit = u64::from_str(value)
                         .or_else(|e|  {
                             Err(Error::new(ErrorKind::InvalidData, e))
                         })?;
                     Ok(CookieDirective::MaxAge(Duration::from_secs(digit)))
                 },
                 COOKIE_DOMAIN => {
-                    Ok(CookieDirective::Domain(value))
+                    Ok(CookieDirective::Domain(String::from(value)))
                 },
                 COOKIE_PATH => {
-                    Ok(CookieDirective::Path(value))
+                    Ok(CookieDirective::Path(String::from(value)))
                 }
                 COOKIE_SAME_SITE => {
-                    match SameSiteValue::from_str(value.as_str()) {
-                        Ok(value) => Ok(CookieDirective::SameSite(value)),
+                    let lower_case = value.to_ascii_lowercase();
+                    match SameSiteValue::from_str(lower_case.as_str()) {
+                        Ok(site_value) => Ok(CookieDirective::SameSite(site_value)),
                         Err(e) => Err(e)
                     }
                 },

@@ -23,7 +23,7 @@ use env_logger;
 use log::LevelFilter;
 
 fn init() {
-    let _ = env_logger::builder().filter_level(LevelFilter::Debug).try_init();
+    let _ = env_logger::builder().filter_level(LevelFilter::Error).try_init();
 }
 
 #[test]

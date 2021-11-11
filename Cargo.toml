@@ -18,7 +18,7 @@ exclude = ["/test_resources"]
 
 [dependencies]
 log="0.4"
-chrono = "0.4"
+httpdate = "1.0.1"
 url = "2.2.2"
 json = "0.12.4"
 case_insensitive_hashmap = "1.0.0"
@@ -28,6 +28,8 @@ rustls-pemfile = "0.2.1"
 
 [dev-dependencies]
 env_logger = "0.8.4"
+chrono = "0.4"
+
 
 [features]
 dangerous_configuration = ["rustls/dangerous_configuration"]

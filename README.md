@@ -12,7 +12,6 @@ This is the first MVP implementation supporting HTTP and basic HTTPS just to tes
 * [json](https://crates.io/crates/json)
 * [url](https://crates.io/crates/url)
 * [log](https://crates.io/crates/log)
-* [chrono](https://crates.io/crates/chrono)
 * [case_insensitive_hashmap](https://crates.io/crates/case_insensitive_hashmap)
 
 # Contributions
