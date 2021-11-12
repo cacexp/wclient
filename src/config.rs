@@ -35,7 +35,7 @@ pub enum HttpsVerify {
     Path(String)
 }
 
-// HTTPS configuration to set Client certificate
+/// HTTPS configuration to set Client certificate
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HttpsCert {
     /// Do not use client certificate (default value)

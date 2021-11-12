@@ -124,7 +124,7 @@
 //! 
 //! ### Client authentication
 //! 
-//! The client app can ba authenticated against the HTTPS using a certificate and the assotiated private key by using the [HttpsCert](crate::config::HttpsCert) enum.
+//! The client app can be authenticated against the HTTPS using a certificate and the assotiated private key by using the [HttpsCert](crate::config::HttpsCert) enum.
 //!
 //!  **_NOTE:_**  If the client certificate is self-signed or signed by CA that is not in the system or custom CA certificates list, the client certificate must contain
 //! the certificate chain to the root CA. In this case, the fist certificate in the file must be the client certificate.
