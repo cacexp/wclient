@@ -1,0 +1,9 @@
+web:
+  image: test-nginx  
+  ports:
+   - "4443:443"
+   - "4444:444"
+echo:
+  image: mendhak/http-https-echo
+  ports:
+  - "8080:80"

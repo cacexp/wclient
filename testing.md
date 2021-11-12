@@ -1,22 +1,48 @@
 # Testing
 
+> **_TO DO:_**  Create cargo scripts to create images and manage test containers.
 ## Pre-requisites
 
-Some tests use a local echo service. The echo service is hosted on a [Docker](https://docker.io) container.
+Some tests uses services hosted on [Docker](https://docker.io) containers. Please, make sure you have installed at least `docker-ce` and `docker-compose`.
 
-To start the container execute:
+## Build the containers
+Before testing, please create the container image:
 
 ```bash
-
-$  docker run -d -p 80:80 -p 443:443 --rm -t mendhak/http-https-echo
-
+$ cd test_resources/test_server
+$ ./create_image.sh
 ```
 
+## Start the containers
+
+To start the container in foreground with logs execute:
+
+```bash
+$ cd test_resources/test_server
+$ docker-compose -f ./docker-compose.yml up
+```
+
+To execute the containers in background add `-d` to the `docker-compose` command:
+
+ ```bash
+$ cd test_resources/test_server
+$ docker-compose -f ./docker-compose.yml up -d
+```
 ## Run the tests
-To run test just execute:
+To run the tests just execute at the project directory:
 
 ```bash
 
 $ cargo test
 
+```
+
+## Stop the containers
+
+If the containers are executed in foreground, just press `Ctrl+C`. If the containers are executed
+in background, execute:
+
+```bash
+$ cd test_resources/test_server
+$ docker-compose -f ./docker-compose.yml stop
 ```

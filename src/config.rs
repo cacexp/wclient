@@ -33,6 +33,16 @@ pub enum HttpsVerify {
     Path(String)
 }
 
+// HTTPS configuration to set Client certificate
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum HttpsCert {
+    /// Do not use client certificate (default value)
+    None,    
+    /// Tuple with paths of files containing certificate and private key
+    /// **Note**: If client certificate is not signed by a trusted CA (see [crate::config::HttpsVerify]), 
+    /// it must include full certificate chain, including root CA
+    CertKey{cert: String, key: String}
+}
 
 /// HTTP Configuration
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -40,20 +50,24 @@ pub struct HttpConfig {
     /// Connecton, write and read timeout for a TCP socket
     pub timeout: Option<Duration>,
     /// Directory or file path with trusted CA certificates
-    pub verify: HttpsVerify
+    pub verify: HttpsVerify,
+    /// Client certificate
+    pub cert: HttpsCert
 }
 
 /// `HttpConfig` helper builder
 pub struct HttpConfigBuilder {
     timeout: Option<Duration>,
-    verify: HttpsVerify 
+    verify: HttpsVerify,
+    cert: HttpsCert
 }
 
 impl HttpConfigBuilder {
     pub fn default() -> HttpConfigBuilder {
         HttpConfigBuilder{
             timeout: None,
-            verify: HttpsVerify::True
+            verify: HttpsVerify::True,
+            cert: HttpsCert::None
         }
     }
 
@@ -69,12 +83,18 @@ impl HttpConfigBuilder {
         self
     }
 
+     /// Sets client certificate
+     pub fn cert(mut self, value: HttpsCert) -> HttpConfigBuilder {
+        self.cert = value;
+        self
+    }
 
     /// Builder function ofor HttpConfig
     pub fn build(self) -> HttpConfig {
         HttpConfig{
             timeout: self.timeout,
-            verify: self.verify
+            verify: self.verify,
+            cert: self.cert
         }
     }
 }

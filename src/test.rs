@@ -47,7 +47,7 @@ fn request_header_1() {
 fn request_header_2() {
     // Test Request Headers are case insensitive, insert twice same header with
     // different case sensitive names
-    let request = RequestBuilder::get("Http://web.myservice.com")
+    let request = RequestBuilder::get("http://web.myservice.com")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .header("accept", "text")
         .build();
@@ -60,7 +60,7 @@ fn request_header_2() {
 #[test]
 fn request_cookie_1() {
     let request =
-        RequestBuilder::get("Http://web.myservice.com")
+        RequestBuilder::get("http://web.myservice.com")
         .cookie("name", "1234")
         .build();
 
@@ -73,7 +73,7 @@ fn request_cookie_2() {
     // Test Request cookie names are case sensitive, insert twice same cookie with
     // different case sensitive names
     let request =
-        RequestBuilder::get("Http://web.myservice.com")
+        RequestBuilder::get("http://web.myservice.com")
         .cookie("name", "0000")
         .cookie("name", "1234")
         .build();
@@ -87,7 +87,7 @@ fn request_cookie_2() {
 
 #[test]
 fn build_request_1() {
-    let request = RequestBuilder::get("Http://web.myservice.com")
+    let request = RequestBuilder::get("http://web.myservice.com")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .param("id", "12345")
         .build();
@@ -104,7 +104,7 @@ fn build_request_2() {
         surname: "Smith"
     };
 
-    let request = RequestBuilder::post("Http://web.myservice.com/user")
+    let request = RequestBuilder::post("ttp://web.myservice.com/user")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .param("id", "12345")
         .json(&data)
@@ -144,7 +144,7 @@ fn test_url_nok1() {
 #[test]
 fn test_echo1() {
     let mut request =
-        RequestBuilder::get("Http://localhost/user").build();
+        RequestBuilder::get("http://localhost:8080/user").build();
 
     let response = request.send();
 
@@ -161,7 +161,7 @@ fn test_echo2() {
         surname: "Smith"
     };
 
-    let result = RequestBuilder::get("Http://localhost/user")
+    let result = RequestBuilder::get("http://localhost:8080/user")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .json(&data)
         .build()
@@ -237,6 +237,14 @@ fn request_boreapy_with_config(config: &HttpConfig) -> Result<Response, crate::E
         .send();
 }
 
+fn request_local_with_config(config: &HttpConfig) -> Result<Response, crate::Error> {
+    return RequestBuilder::get("https://localhost:4443/user.json")
+        .header(ACCEPT, "*/*")
+        .config(&config)
+        .build()        
+        .send();
+}
+
 fn http_boreapy_ok(result: Result<Response, crate::Error>) {
     if let Some(e) = result.as_ref().err(){
         println!("{}", e);
@@ -265,6 +273,35 @@ fn http_boreapy_ok(result: Result<Response, crate::Error>) {
     let result_data = result_json.unwrap();
 
     assert!(result_data.has_key("activity"));
+
+}
+
+fn http_local_ok(result: Result<Response, crate::Error>) {
+    if let Some(e) = result.as_ref().err(){
+        println!("{}", e);
+    }
+
+    assert!(result.is_ok());
+
+    let response = result.unwrap();
+
+    assert_eq!(response.status_code, 200);
+
+    let body = String::from_utf8(response.body().clone());
+
+    assert!(body.is_ok());
+
+    let result_json = response.json();
+
+    if let Some(e) = result_json.as_ref().err(){
+        println!("{}", e);
+    }
+
+    assert!(result_json.is_ok());
+
+    let result_data = result_json.unwrap();
+
+    assert!(result_data.has_key("name"));
 
 }
 
@@ -315,6 +352,84 @@ fn test_https_custom_server_ca_file() {
     let result = request_boreapy_with_config(&config);
 
     http_boreapy_ok(result);
+
+}
+
+#[test]
+fn test_https_custom_server_ca_file2() {
+
+    init();
+
+    let mut ca_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    ca_path.push("test_resources/test-ca/ca.crt");
+    let ca = String::from(ca_path.to_str().unwrap());
+
+    let config = HttpConfigBuilder::default()
+        .verify(HttpsVerify::Path(ca))
+        .build();
+
+    let result = request_local_with_config(&config);
+
+    http_local_ok(result);
+
+}
+
+#[test]
+fn test_https_client_cert1() {
+
+    init();
+/*
+    let mut ca_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    ca_path.push("test_resources/test-ca/ca.crt");
+    let ca = String::from(ca_path.to_str().unwrap());
+*/
+    let mut cert_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cert_path.push("test_resources/test-ca/full_client.crt");
+
+    let cert = String::from(cert_path.to_str().unwrap());
+
+    let mut key_path =  PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    key_path.push("test_resources/test-ca/client.key");
+
+    let key = String::from(key_path.to_str().unwrap());
+    let config = HttpConfigBuilder::default()
+ //       .verify(HttpsVerify::Path(ca))
+        .cert(HttpsCert::CertKey{cert,key})
+        .build();
+
+    let result = request_local_with_config(&config);
+
+    http_local_ok(result);
+
+}
+
+
+#[test]
+fn test_https_wrong_client_cert1() {
+
+    init();
+
+    let mut cert_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cert_path.push("test_resources/other-ca/full_client.crt");
+
+    let cert = String::from(cert_path.to_str().unwrap());
+
+    let mut key_path =  PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    key_path.push("test_resources/other-ca/client.key");
+
+    let key = String::from(key_path.to_str().unwrap());
+
+    let config = HttpConfigBuilder::default()
+        .cert(HttpsCert::CertKey{cert,key})
+        .build();
+
+    let result = request_local_with_config(&config);
+
+    assert!(result.is_err());
+
+    let error = result.err().unwrap();
+    
+    println!("{}", &error);
 
 }
 
