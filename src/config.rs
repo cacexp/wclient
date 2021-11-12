@@ -15,7 +15,9 @@
 //! HTTP configuration settings
 //! 
 //! Current configuration settings:
-//! * `timeout`: Sets the [Duration](std::time::Duration) for a connect, read or write operation at a TCP socket
+//! * `timeout`: Sets the [Duration](std::time::Duration) for a connect, read or write operation at a TCP socket (**TO DO**)
+//! * `verify`: The Root CA certificates to authenticate the server with HTTPS, see [HttpsVerify](crate::config::HttpsVerify)
+//! * `cert`: The client certificate to be authenticated against the serve with HTTPS, see [HttpsCert](crate::config::HttpsCert)
 //!  
 
 use std::time::Duration;
