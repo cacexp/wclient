@@ -6,13 +6,11 @@ This is the first MVP implementation supporting HTTP and basic HTTPS just to tes
 
 [How to run the tests](testing.md)
 
-`wclient` uses:
+`wclient` uses, among others:
 
 * [rustls](https://crates.io/crates/rustls)
 * [json](https://crates.io/crates/json)
 * [url](https://crates.io/crates/url)
-* [log](https://crates.io/crates/log)
-* [case_insensitive_hashmap](https://crates.io/crates/case_insensitive_hashmap)
 
 # Contributions
 

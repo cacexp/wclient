@@ -24,9 +24,9 @@
 //! * HTTP 1.1 Single Body
 //! * HTTPS (v1.1) with default site certificate verification (only with host CA certificates)
 //! * HTTPS custom site certificate validation (local directory or certificate chain) in *.pem format
+//! * HTTPS client certificate authentication
 //!
 //! # Future Features
-//! * HTTPS client certification authentication
 //! * Multipart
 //! * HTTP Session with Cookie Jar
 //! * HTTP Connection pooling
@@ -95,12 +95,17 @@
 //! ``` 
 //! 
 //! After, created, the `send` function sends the request message to the target URL and returns a `Result<Response, Error>` value.
-//!  ## HTTP Connection configuration
+//! 
+//! ## HTTP Connection configuration
 //! 
 //! The `RequestBuilder` has a function to set a [HttpConfig](crate::config::HttpConfig). Currently, it can be configured:
 //! * The Root CA certificates to authenticate the server with HTTPS, see [HttpsVerify](crate::config::HttpsVerify)
+//! * The client certificate to be authenticated against the serve with HTTPS, see [HttpsCert](crate::config::HttpsCert)
+
+//! ### Server authentication
 //! 
-//! For example:
+//! By default, `wclient`uses the system CA certificates directory (for example, `/etc/ssl/certs`). Trusted CA can be also passed as a `.pem` file path or a 
+//! directory containing certificate files:
 //! 
 //! ```no_run
 //! 
@@ -117,6 +122,27 @@
 //! 
 //! ```
 //! 
+//! ### Client authentication
+//! 
+//! The client app can ba authenticated against the HTTPS using a certificate and the assotiated private key by using the [HttpsCert](crate::config::HttpsCert) enum.
+//!
+//!  **_NOTE:_**  If the client certificate is self-signed or signed by CA that is not in the system or custom CA certificates list, the client certificate must contain
+//! the certificate chain to the root CA. In this case, the fist certificate in the file must be the client certificate.
+//! 
+//! ```no_run
+//! 
+//! use wclient::RequestBuilder;
+//! use wclient::config::{HttpsVerify, HttpConfigBuilder};
+//! 
+//! let config = HttpConfigBuilder::default()
+//!    .cert(HttpsCert::CertKey{"/path/client.crt", "/path/client.key"})
+//!    .build();
+//! 
+//! let request = RequestBuilder::get("https://web.myservice.com/user")
+//!     .header("Accept", "application/json")
+//!     .config(&config);
+//! 
+//! ```
 #![allow(dead_code)]
 
 pub mod config;
