@@ -12,6 +12,9 @@ This is the first MVP implementation supporting HTTP and basic HTTPS just to tes
 * [json](https://crates.io/crates/json)
 * [url](https://crates.io/crates/url)
 
+# Documentation
+
+Please, visit [docs.rs](https://docs.rs/wclient/) to get access to the last version of the library documentation.
 # Contributions
 
 This development is in an early stage. I appreciate you interest and welcome any comment, bug, idea, etc.
