@@ -20,7 +20,8 @@
 //! **Note**: This is a MVP implementation
 //! 
 //! # Features
-//! * HTTP 1.1 Request and Response over plain TCP/IP
+//! * HTTP 1.1 [Request](crate::Request) and [Response](crate::Response) over plain TCP/IP and TLS
+//! //! * HTTP [Session](crate::Session) to share configuration and a cookie jar among requests
 //! * HTTP 1.1 Single Body
 //! * HTTPS (v1.1) with default site certificate verification (only with host CA certificates)
 //! * HTTPS custom site certificate validation (local directory or certificate chain) in *.pem format
@@ -28,7 +29,6 @@
 //!
 //! # Future Features
 //! * Multipart
-//! * HTTP Session with Cookie Jar
 //! * HTTP Connection pooling
 //!  
 //! # User Guide
@@ -52,7 +52,7 @@
 //! 
 //! Next example shows how to construct a `GET` request to the URL `http://web.myservice.com/user?id=12345&name=John`
 //! 
-//! ```rust
+//! ```no_run
 //! use wclient::RequestBuilder;
 //!
 //! let request = RequestBuilder::get("http://web.myservice.com/user")
@@ -132,17 +132,57 @@
 //! ```no_run
 //! 
 //! use wclient::RequestBuilder;
-//! use wclient::config::{HttpsVerify, HttpConfigBuilder};
+//! use wclient::config::{HttpsCert, HttpConfigBuilder};
 //! 
 //! let config = HttpConfigBuilder::default()
-//!    .cert(HttpsCert::CertKey{"/path/client.crt", "/path/client.key"})
+//!    .cert(HttpsCert::CertKey{cert: String::from("/path/client.crt"), key: String::from("/path/client.key")})
 //!    .build();
 //! 
 //! let request = RequestBuilder::get("https://web.myservice.com/user")
 //!     .header("Accept", "application/json")
-//!     .config(&config);
+//!     .config(&config)
+//!     .build();
 //! 
 //! ```
+//! 
+//! ## HTTP Sessions
+//! 
+//! The [Session](crate::Session) type allows to store common configurations and share cookies through an internal or custom set cookie jar.
+//! 
+//! `Session` values are constructed through the [SessionBuilder](crate::SessionBuilder) builder that allows to set a `HttpConfig` value 
+//! and a shared pointer to a shared `CookieJar` trait implementation.
+//! 
+//! ```no_run
+//! 
+//! use wclient::{HttpConfigBuilder, SessionBuilder};
+//! 
+//! let config = HttConfigBuilder::default()
+//!    .cert(HttpsCert::CertKey{cert: String::from("/path/client.crt"), key: String::from("/path/client.key")})
+//!    .build();
+//!     
+//! let session = SessionBuilder::new()
+//!    .config(&config)
+//!    .build();
+//! 
+//! ```
+//! 
+//! Once built, the `Session` value allows to create `RequestBuilder` for each HTTP method that shares the `HttpConfig` and `CookieJar`. 
+//! The `RequestBuilder` can override the shared config and cookie jar.
+//! 
+//! ```no_run
+//! use wclient::SessionBuilder;
+//! 
+//! let session = SessionBuilder::new().build();
+//! 
+//! let request = session.get("https://service.com/user").
+//!     .header("Accept", "application/json")
+//!     .build();
+//! 
+//! let response = request.send();
+//! 
+//!  ```
+//! 
+
 #![allow(dead_code)]
 
 pub mod config;
@@ -153,11 +193,15 @@ mod constants;
 
 mod http;
 
+use std::sync::Mutex;
+use crate::cookie::MemCookieJar;
+use crate::cookie::CookieJar;
+use std::sync::Arc;
 use crate::cookie::Cookie;
 use crate::config::{HttpConfig, HttpConfigBuilder};
 
 use crate::constants::{CONTENT_TYPE, CONTENT_TYPE_JSON};
-use crate::http::{parse_url, ClientConnectionFactory};
+use crate::http::{parse_url, EndPoint, HttpScheme, ClientConnectionFactory};
 
 use std::str::from_utf8;
 use std::io::{Error, ErrorKind};
@@ -166,7 +210,6 @@ use std::fmt;
 use std::collections::HashMap;
 use case_insensitive_hashmap::CaseInsensitiveHashMap;
 use json::JsonValue;
-use url::Url;
 
 
 /// HTTP Request Method
@@ -211,46 +254,88 @@ impl fmt::Display for HttpMethod {
 
 pub struct Request {
     /// HTTP method
-    pub method: HttpMethod,
-    /// Target url
-    pub url: String,
-    /// Parsed URL
-    parsed_url: Option<Url>,
+    pub method: HttpMethod,    
+    /// Target URL
+    pub(crate) url: String,
+    /// Request endpoint
+    pub(crate) endpoint: Option<EndPoint>,
+    /// Request path
+    pub path: String, 
     /// HTTP version
     pub(crate) config: HttpConfig,
     /// Request headers
     pub(crate) headers: CaseInsensitiveHashMap<String>,
+    /// CookieJar to get/save cookies
+    pub (crate) jar: Arc<Mutex<dyn CookieJar>>,
     // Request Cookies
     pub(crate) cookies: HashMap<String, String>,
     /// Request params
     pub(crate) params: HashMap<String, String>,
     /// Request body (not implemented multi-part yet)
-    pub(crate) body: Vec<u8>
+    pub(crate) body: Vec<u8>,
+    /// On-build error
+    init_error: Option<Error>
 }
 
 
 impl Request {
+   
     /// Checks if this request has body
     pub fn has_body(&self) -> bool {
         self.body.len() > 0
     }
 
+    pub fn url(&self) -> &str {
+        self.url.as_str()
+    }
+
+    pub (crate) fn endpoint(&self) -> Result<&EndPoint, Error> {
+        if self.endpoint.is_none() {
+            return Err(Error::new(ErrorKind::InvalidData, "URL has not got a valid endpoint"));
+        }
+
+        Ok(self.endpoint.as_ref().unwrap())
+    }
+
+    pub (crate) fn path(&self) ->  &str {
+        // if no errors path should be always good
+        self.path.as_str()
+    }
+
      /// Sends the request to the target URL.
     /// Returns the Response message or `std::io::Error` if any issue happened.
     pub fn send(&mut self) -> Result<Response, Error> {
-        let url = parse_url(&self.url)?;
+        
+        if let Some(ref error) = self.init_error {
+            return Err(Error::new(error.kind(), error.get_ref().unwrap().to_string()));
+        }
+
+        if self.endpoint.is_none(){
+            return Err(Error::new(ErrorKind::InvalidData, "Cannot get host from URL"));
+        }
+
+        let endpoint = self.endpoint.as_ref().unwrap();
+
+        // Get applicable cookies from cookie jar, request cookies have prevalence over cookie jar's ones
+        let active_cookies = self.jar.lock().as_mut().unwrap().active_cookies(endpoint.host.as_str(), &self.path, endpoint.scheme == HttpScheme::HTTPS);
+
+        for cookie in active_cookies {
+            if self.cookies.contains_key(&cookie.0) {
+                continue;
+            }
+
+            self.cookies.insert(cookie.0, cookie.1);
+
+        }
 
         let mut connection =
             ClientConnectionFactory::client_connection(
-                &url,
+                endpoint,
                 &self.config)?;
-
-        self.parsed_url = Some(url);
         
         connection.send(self)
         
     }
-
 }
 
 /// Helper builder for [Request](crate::Request)
@@ -281,12 +366,15 @@ pub struct RequestBuilder {
     config: HttpConfig,
     /// Request headers
     headers: CaseInsensitiveHashMap<String>,
+    /// CookieJar to get/store server cookies
+    jar: Option<Arc<Mutex<dyn CookieJar>>>,
     // Request Cookies
     cookies: HashMap<String, String>,
     /// Request params
     params: HashMap<String, String>,
     /// Request body (not implemented multi-part yet)
-    body: Vec<u8>
+    body: Vec<u8>,
+    
 }
 
 impl RequestBuilder {
@@ -297,6 +385,7 @@ impl RequestBuilder {
             url: String::from(url),
             config: HttpConfigBuilder::default().build(),
             headers: CaseInsensitiveHashMap::new(),
+            jar: None,
             cookies: HashMap::new(),
             params: HashMap::new(),
             body: Vec::new()
@@ -409,6 +498,13 @@ impl RequestBuilder {
         self
     }
 
+    /// Sets a CookieJar to get/save session cookies
+    
+    pub fn cookie_jar(mut self, jar: Arc<Mutex<dyn CookieJar>>) -> RequestBuilder {
+        self.jar = Some(jar);
+        self
+    }
+
     /// Sets a request body. The `Request` takes ownership of the `data` buffer.
     pub fn body(mut self, data: Vec<u8>) -> RequestBuilder {
         self.body = data;
@@ -424,18 +520,201 @@ impl RequestBuilder {
     }
 
     /// Creates a [Request](crate::Request) struct.
-    pub fn build(self) -> Request {
+    pub fn build(mut self) -> Request {
+
+        let mut init_error: Option<Error> = None;
+        let mut endpoint_holder: Option<EndPoint> = None;
+
+        let url = parse_url(&self.url);
+
+        let path = String::from(
+            if url.is_ok() {
+                url.as_ref().unwrap().path()
+            } else {
+                "/"
+            }
+        );
+        
+        if url.is_ok() {
+
+            let endpoint = EndPoint::from_url(url.as_ref().unwrap());
+            
+            if endpoint.is_err() {
+                init_error = Some(endpoint.err().unwrap());
+            } else {
+                endpoint_holder = Some(endpoint.unwrap());
+            }
+        } else {
+            init_error = url.err();
+        } 
+
+        if self.jar.is_none() {
+            self.jar = Some(Arc::new(Mutex::new(MemCookieJar::new())));
+        }
+
         Request {
             method: self.method,
             url: self.url,
-            parsed_url: None,
+            endpoint: endpoint_holder,
+            path, 
             config: self.config,
             headers: self.headers,
+            jar: self.jar.unwrap().clone(),
             cookies: self.cookies,
             params: self.params,
-            body: self.body
+            body: self.body,
+            init_error
+        }
+    }
+}
+
+/// HTTP session used to share configuration and cookies among different requests and responses
+/// 
+/// The `Session` is constructed by a [SessionBuilder](crate::SessionBuilder) which accepts an [HttpConfig](crate::SessionBuilder) and 
+/// a shared [CookieJar](crate::cookie::CookieJar).
+/// 
+/// When constructed, a `Session` can generate request builders with shared config and cookie environment. 
+/// 
+/// See [modules documentation](index.html#http-sessions) for session user manual.
+/// 
+pub struct Session {
+    config: HttpConfig,
+    jar: Arc<Mutex<dyn CookieJar>>
+}
+
+impl Session {
+    /// Gets session config
+    pub fn config(&self) -> &HttpConfig {
+        &self.config
+    }
+
+    /// Gets session's cookie jar
+    pub fn cookie_jar(&self) -> Arc<Mutex<dyn CookieJar>> {
+        self.jar.clone()
+    }
+
+   /// Creates a `CONNECT` request builder
+   pub fn connect(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::CONNECT, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+
+    /// Creates a `DELETE` request builder
+    pub fn delete(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::DELETE, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+
+    }
+
+    /// Creates a `GET` request builder
+    pub fn get(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::GET, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+
+    /// Creates a `HEAD` request builder
+    pub fn head(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::HEAD, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+
+    /// Creates a `OPTIONS` request builder
+    pub fn options(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::OPTIONS, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+
+    /// Creates a `PATCH` request builder
+    pub fn patch(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::PATCH, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+
+    /// Creates a `POST` request builder
+    pub fn post(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::POST, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+
+    /// Creates a `PUT` request builder
+    pub fn put(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::PUT, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+
+
+    /// Creates a `TRACE` request builder
+    pub fn trace(&self, url: &str) -> RequestBuilder {
+        RequestBuilder::new(HttpMethod::TRACE, url)
+        .config(&self.config)
+        .cookie_jar(self.jar.clone())
+    }
+}
+
+/// [Session](crate::Session) Builder class.
+/// 
+/// Usage example:
+/// 
+/// ```no_run
+/// use wclient::{SessionBuilder, HttpConfigBuilder};
+/// 
+/// let config = HttpConfigBuilder::default()
+///     // Set config here
+///     .build();
+/// 
+/// let session = SessionBuilder::new()
+///     .config(&config)
+///     .build();
+/// ```
+/// 
+pub struct SessionBuilder {
+    config: Option<HttpConfig>,
+    jar: Option<Arc<Mutex<dyn CookieJar>>>
+}
+
+impl SessionBuilder {
+
+    /// Constructor
+    pub fn new() -> SessionBuilder {
+        SessionBuilder {
+            config: None,
+            jar: None
+        }
+    }
+
+    /// Sets the `Request` configuration
+    pub fn config( mut self, data: &HttpConfig) -> SessionBuilder {
+        self.config = Some(data.clone());
+        self
+    }
+
+     /// Sets a CookieJar to get/save session cookies, uf not provided defauls is [MemCookieJar](crate::cookie::MemCookieJar) 
+     pub fn cookie_jar(mut self, jar: Arc<Mutex<dyn CookieJar>>) -> SessionBuilder {
+        self.jar = Some(jar);
+        self
+    }
+
+    /// `Session` Builder
+    pub fn build(mut self) -> Session {
+        if self.jar.is_none() {
+            self.jar = Some(Arc::new(Mutex::new(MemCookieJar::new())));
         }
 
+        if self.config.is_none() {
+            self.config = Some(HttpConfigBuilder::default().build());
+        }
+        Session {
+            config: self.config.unwrap(),
+            jar: self.jar.unwrap().clone()
+        }
     }
 }
 

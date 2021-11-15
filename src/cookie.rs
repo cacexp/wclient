@@ -17,6 +17,9 @@ use std::io::{Error, ErrorKind};
 use httpdate::parse_http_date;
 use std::time::{Duration, SystemTime};
 use std::ops::Add;
+use std::collections::{HashMap, HashSet};
+use std::cmp::{PartialEq, Eq};
+use std::hash::{Hash, Hasher};
 
 pub(crate) const COOKIE: &str = "cookie";
 pub(crate) const COOKIE_EXPIRES: &str = "expires";
@@ -56,41 +59,53 @@ impl FromStr for SameSiteValue {
 ///
 ///  `let cookie = Cookie::from_str("id=a3fWa; Expires=Wed, 21 Oct 2022 07:28:00 GMT");`
 /// 
-/// See [Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) for more information.
+/// See [RFC6265 Set-Cookie](https://datatracker.ietf.org/doc/html/rfc6265#section-4.2) for more information.
 
+#[derive(Debug,Clone)]
 pub struct Cookie {
     /// Cookie name
     pub(crate) name: String,
     /// Cookie value
     pub (crate) value: String,
-    /// Cookie domain (optional)
-    pub(crate) domain: Option<String>,
-    /// Cookie path (optional)
-    pub(crate) path: Option<String>,
+    /// Cookie domain, by default is the originating domain of the request
+    pub(crate) domain: String,
+    /// Cookie path, by default, it is the request's path
+    pub(crate) path: String,
     /// When the Cookie expires, if None, it does not expire.
     /// This value is obtained from Max-Age and Expires attributes (Max-Age has precedence)
     pub(crate) expires: Option<SystemTime>,
     /// Cookie same site value (option)
-    pub(crate) same_site: Option<SameSiteValue>,
+    pub(crate) same_site: SameSiteValue,
     /// Cookie requires HTTPS
     pub(crate) secure: bool,
-    /// Browsers does not allow Javascript access to this cookie (this directive should be ignored)
-    pub(crate) http_only: bool       
+    /// Browsers does not allow Javascript access to this cookie
+    pub(crate) http_only: bool,
+    /// Other Set-Cookie extensions
+    pub(crate) extensions: HashMap<String, String>    
 }
 
 
 impl Cookie {
-    /// Constructor. It takes ownership of `name` and `value` strings.
-    pub fn new (name: String, value: String) -> Cookie {
+    /// Constructor. It takes ownership params:
+    ///
+    /// * `name`: Cookie name
+    /// * `value`: Cookie value, for binary data it is recommended [Base64](https://en.wikipedia.org/wiki/Base64) encoding.
+    /// * `domain`: Cookie domain, sets hosts (domain and subdomains) to which the cookie will be sent, in includes subdomains.
+    /// If not present in `Set-Cookie` header, it is taken from the HTTP request `Host` header
+    /// * `path`: Cookie path, paths (same path or children) to which the cookie will be sent
+    /// If not present in `Set-Cookie` header, it is taken from the HTTP request path
+
+    pub fn new (name: String, value: String, domain: String, path: String) -> Cookie {
         Cookie {
             name,
             value,
-            domain: None,
-            path: None,
+            domain,
+            path,
             expires: None,
-            same_site: None,
+            same_site: SameSiteValue::Lax,
             secure: false,
-            http_only: false
+            http_only: false,
+            extensions: HashMap::new()            
         }
     }
 
@@ -104,14 +119,14 @@ impl Cookie {
         self.value.as_str()
     }
 
-    /// Cookie domain (optional)
-    pub fn domain(& self) -> Option<&String> {
-        self.domain.as_ref()
+    /// Cookie domain: hosts to which the cookie will be sent
+    pub fn domain(& self) -> &str {
+        self.domain.as_str()
     }
 
-    /// Cookie path (optional)
-    pub fn path(& self) -> Option<&String> {
-        self.path.as_ref()
+    /// Cookie path
+    pub fn path(& self) -> &str {
+        self.path.as_str()
     }
     /// When the Cookie expires, if `None`, it does not expire.
     /// This value is obtained from `Max-Age` and `Expires` attributes (Max-Age has precedence)
@@ -120,8 +135,8 @@ impl Cookie {
     }
 
     /// Cookie `Same-Site` value (optional)
-    pub fn same_site(& self) -> Option<SameSiteValue> {
-        self.same_site.clone()
+    pub fn same_site(& self) -> SameSiteValue {
+        self.same_site
     }
     /// Cookie requires HTTPS
     pub fn secure(& self) -> bool {
@@ -131,20 +146,88 @@ impl Cookie {
     pub fn http_only(& self) -> bool {
         self.http_only
     }
-   
-}
 
-/// Traid to parse a Cookie from an string. This is usefull when receiving the `Set-Cookie` header from an HTTP response.
-impl FromStr for Cookie {
+    /// Cookie extendions
+    pub fn extensions(&self) -> &HashMap<String, String> {
+        &self.extensions
+    }
+
+    /// Checks if the request path match the cookie path. 
+    /// 
+    /// Using [RFC6265 Section 5.1.4](https://datatracker.ietf.org/doc/html/rfc6265#section-5.1.4) Algorithm.    
+    pub fn path_match(&self, request_path: &str) -> bool {
+        
+        let cookie_path = self.path();
+
+        let cookie_path_len = cookie_path.len();
+        let request_path_len = request_path.len();
+ 
+       
+        if !request_path.starts_with(cookie_path) {  // A. cookie path is a prefix of request path
+            return false;
+        }
     
-    type Err = Error;
+        return request_path_len ==  cookie_path_len // 1. They are identical, or
+            // 2. A and cookie path ends with an slash
+            || cookie_path.chars().nth(cookie_path_len - 1).unwrap() == '/' 
+            // 3. A and the first char of request path that is not incled in request path is an slash
+            || request_path.chars().nth(cookie_path_len).unwrap() == '/'; 
+    }
 
-    fn from_str(s: &str) ->  Result<Cookie, Self::Err> {
-        let mut components = s.split(';');
+    /// Checks if the request domain match the cookie domain. 
+    /// 
+    /// Using [RFC6265 Section 4.1.1.3](https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.2.3).
+    pub fn domain_match(&self, request_domain: &str) -> bool {
+        let cookie_domain = self.domain();
+        
+        if let Some(index) = request_domain.rfind(cookie_domain) {
+            if index == 0 { // same domain
+                return true;
+            }
+            // The cookie domain is a subdomain of request domain, acccept
+            return request_domain.chars().nth(index-1).unwrap() == '.';
+        }
+         
+        return false;
+    }
 
+    /// Checks if the cookie can be used on this request
+    pub fn request_match(&self, request_domain: &str, request_path: &str, secure: bool) -> bool {
+
+        // Match Secure restrictions 
+
+        if self.secure && !secure {
+            return false;
+        }        
+    
+        // Strict behaviour: it is only same-site if the domain is the same
+
+        if self.same_site == SameSiteValue::Strict && self.domain != request_domain {
+            return false;
+        }
+
+        // Lax behaviour: allow cross-site from subdomain to father domain
+        if self.same_site() == SameSiteValue::Lax && !self.domain_match(request_domain) {
+            return false;
+        }
+
+        // None: allow all cookies transfer but only it HTTPS is in use
+        if self.same_site == SameSiteValue::None && ! self.secure {
+            return false;
+        }
+
+        // PATH filtering
+
+        return self.path_match(request_path);      
+    }
+
+     /// Parses a cookie value and modifiers from a 'Set-Cookie'header
+    pub fn parse(s: &str, domain: &str, path: &str) ->  Result<Cookie, Error> {
+    let mut components = s.split(';');
+ 
         return if let Some(slice) = components.next() {
             let (key, value) = parse_cookie_value(slice)?;
-            let mut cookie = Cookie::new(key, value);
+            let mut cookie = Cookie::new(key, value, String::from(domain), String::from(path));
             while let Some(param) = components.next() {
                 let directive = CookieDirective::from_str(param)?;
                 match directive {
@@ -154,22 +237,51 @@ impl FromStr for Cookie {
                         }
                     },
                     CookieDirective::MaxAge(seconds) => {
-                        cookie.expires = Some(SystemTime::now().add(seconds));
+                         cookie.expires = Some(SystemTime::now().add(seconds));
                     },
-                    CookieDirective::Domain(url) => cookie.domain = Some(url),
-                    CookieDirective::Path(path) => cookie.path = Some(path),
-                    CookieDirective::SameSite(val) => cookie.same_site = Some(val),
+                    CookieDirective::Domain(url) => {   // starting dot is ignored                      
+                       cookie.domain = if let Some(stripped) = url.as_str().strip_prefix(".") {
+                           String::from(stripped)
+                       } else {
+                           url
+                       }    
+                    },
+                    CookieDirective::Path(path) => cookie.path = path,
+                    CookieDirective::SameSite(val) => cookie.same_site = val,
                     CookieDirective::Secure => cookie.secure = true,
-                    CookieDirective::HttpOnly => cookie.http_only = true
+                    CookieDirective::HttpOnly => cookie.http_only = true,
+                    CookieDirective::Extension(name, value) => {
+                        let _res = cookie.extensions.insert(name, value);
+                    }
                 }
-            }
+            }         
             Ok(cookie)
         } else {
-            let (key, value) = parse_cookie_value(s)?;
-            Ok(Cookie::new(key, value))
+            if CookieDirective::from_str(s).is_ok() {
+                return Err(Error::new(ErrorKind::InvalidData, "Cookie has not got name/value"));
+            };
+
+            let (key, value) = parse_cookie_value(s)?;            
+            Ok(Cookie::new(key, value, String::from(domain),  String::from(path)))
         }
     }
 }
+
+impl PartialEq for Cookie {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name 
+    }    
+}
+
+impl Eq for Cookie{}
+
+impl Hash for Cookie {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.domain.hash(state);
+    }
+}
+
 
 /// Helper function to parse the `Cookie` name and value
 pub(crate) fn parse_cookie_value(cookie: &str) -> Result<(String, String), Error>{
@@ -191,7 +303,8 @@ enum CookieDirective {
     Path(String),
     SameSite(SameSiteValue),
     Secure,
-    HttpOnly
+    HttpOnly,
+    Extension(String, String)
 }
 
 /// Helper function to parse `CookieDirective`
@@ -228,12 +341,10 @@ impl FromStr for CookieDirective {
                         Err(e) => Err(e)
                     }
                 },
-                _ => return Err(
-                    Error::new(ErrorKind::InvalidData,
-                            format!("Invalid HTTP cookie directive: {}", &key)))
+                _ => Ok(CookieDirective::Extension(key, value.to_string()))
             }
         } else {
-            match s {
+            match s.trim().to_ascii_lowercase().as_str() {
                 COOKIE_SECURE => Ok(CookieDirective::Secure),
                 COOKIE_HTTP_ONLY => Ok(CookieDirective::HttpOnly),
                 _ => return Err(
@@ -243,6 +354,71 @@ impl FromStr for CookieDirective {
         }
     }
 }
+
+/// Cookies repository trait. Keeps active cookies from a session.
+pub trait CookieJar {
+    /// Adds a cookie to the jar, if 'value' has no 'domain' member, 'request_domain' is used
+    fn cookie(&mut self, value: Cookie, request_domain: &str);
+
+    /// Gets the active cookie name/value list for the given domain (expired are deleted)
+    fn active_cookies(&mut self, request_domain: &str, request_path: &str, secure: bool) -> Vec<(String, String)>;
+ }
+
+
+ pub struct MemCookieJar {
+    // Hash set of cookies by target domain
+    cookies: HashSet<Cookie>
+ }
+
+ impl MemCookieJar {
+     pub fn new() -> MemCookieJar{
+        MemCookieJar {
+            cookies: HashSet::new()
+        }
+     }
+ }
+
+ 
+ impl CookieJar for MemCookieJar {
+    fn cookie(&mut self, value: Cookie, request_domain: &str) {
+
+        if !value.domain_match(request_domain) {
+            return; // Discard different domain
+        } 
+        let now =  SystemTime::now();
+
+        if let Some(expires) = value.expires() {
+            if expires < now {
+                return; // Discard expired 
+            }
+        }
+       
+        self.cookies.insert(value);
+    }
+
+    fn active_cookies(&mut self, request_domain: &str, request_path: &str, secure: bool) -> Vec<(String, String)> {
+        
+        let mut result = Vec::new();
+
+        // First clean expired cookies
+        let now =  SystemTime::now();
+
+        self.cookies.retain( |c| {
+            if let Some(time) = c.expires {
+                return time < now;
+            }
+            return true;
+        });
+                
+        for cookie in self.cookies.iter() {
+            if cookie.request_match(request_domain, request_path, secure) {
+                result.push((cookie.name.clone(), cookie.value.clone()));
+            }
+        }
+
+        return result;
+    }
+ }
 
 #[cfg(test)]
 mod cookie_test;

@@ -49,7 +49,14 @@ pub(crate) fn parse_url(url: &str) -> Result<Url, Error> {
         |u| Err(Error::new(ErrorKind::InvalidInput, u))
     )?;
 
-    Ok(url)
+    if !url.has_host() {
+        return Err(Error::new(ErrorKind::InvalidInput, "URL has no host"));
+    }
+
+    return match url.scheme().to_ascii_lowercase().as_str() {
+        "http" | "https" => Ok(url),
+        _ => Err(Error::new(ErrorKind::InvalidInput, "Invalid URL scheme: it should be http or https"))
+    }
 }
 
 /// HTTP scheme, it can be plain HTTP or secure HTTPS
@@ -77,7 +84,9 @@ pub (crate) struct EndPoint {
     /// Target host
     pub host: String,
     /// Target port
-    pub port: u16
+    pub port: u16,
+    /// Is default port
+    pub default: bool
 }
 
 impl EndPoint {
@@ -88,7 +97,7 @@ impl EndPoint {
         let port = url.port().unwrap_or(default_port);
         let host = String::from(url.host_str().ok_or(
             Error::new(ErrorKind::AddrNotAvailable, "Cannot get host from url"))?);
-        Ok(EndPoint { scheme, host, port })
+        Ok(EndPoint { scheme, host, port, default: port == default_port })
     }
 }
 
@@ -144,7 +153,7 @@ impl ClientConnection  {
             debug!("{}", string);
         }
 
-        return self.receive();
+        return self.receive(request);
     }
 
     /// Close the connection
@@ -156,13 +165,13 @@ impl ClientConnection  {
     }
 
     fn write_http11(writer: &mut impl Write, request: &Request) -> Result<(), Error> {
-        let target_url = request.parsed_url.as_ref().ok_or_else(
-            || Error::new(ErrorKind::AddrNotAvailable, "Does not have a valid Http url")
-        )?;
 
+         
+        let endpoint = request.endpoint()?;
+        
         write!(writer, "{} {}",
                request.method,
-               &target_url.path())?;
+               request.path())?;
 
         if !request.params.is_empty() {
             write!(writer, "?")?;
@@ -173,14 +182,13 @@ impl ClientConnection  {
 
         write!(writer, " HTTP/1.1\r\n")?;  // println! only writes \n
 
-        if target_url.has_host() {
-            let host = target_url.host_str().unwrap_or_else(|| "");
-            match target_url.port() {
-                None => write!(writer, "Host: {}\r\n", host)?,
-                Some(port) => write!(writer, "Host: {:?}:{:?}\r\n", host, port)?
-            }
+      
+        if endpoint.default {
+            write!(writer, "Host: {}\r\n", &endpoint.host)?;
+        } else {
+            write!(writer, "Host: {:?}:{:?}\r\n", &endpoint.host, endpoint.port)?;
         }
-
+    
         if request.cookies.len() > 0 {
             write!(writer, "Cookie: ")?;
             let mut first = true;
@@ -212,10 +220,13 @@ impl ClientConnection  {
     }
 
     /// Receives a [Response](crate::Response) from server
-    pub fn receive(&mut self) -> Result<Response, Error> {
+    pub fn receive(&mut self, request: &Request) -> Result<Response, Error> {
+
+        let host = &request.endpoint()?.host;
+        let path = request.path();
 
         debug!("Receiving Response");
-        
+
         let mut line = String::new();
 
         let mut buffer = BufReader::new(self.transport.as_mut());
@@ -251,7 +262,7 @@ impl ClientConnection  {
                     let (key, value) = Self::parse_http11_header(trimmed)?;
                     let key_lc = key.to_lowercase();
                     if key_lc == SET_COOKIE {
-                        let cookie = Cookie::from_str(&value)?;
+                        let cookie = Cookie::parse(&value, host, path)?;
                         response.cookies.push(cookie);
                     }
 
@@ -372,15 +383,13 @@ impl ClientConnectionFactory {
     /// 
     /// Returns a shareable refcount pointer `Arc<ClientConnection>` to be prepared to reuse
     /// connections with HTTP 1.1 and later
-    pub(crate) fn client_connection(url: &Url, 
+    pub(crate) fn client_connection(endpoint: &EndPoint, 
                                     config: &HttpConfig) -> Result<Box<ClientConnection>, Error>
     {
-        // TODO: get proxy from config
-        let end_point = EndPoint::from_url(url)?;
+        
+        let transport = Self::make_transport(endpoint, config)?;
 
-        let transport = Self::make_transport(&end_point, config)?;
-
-        Ok(Box::new(ClientConnection::new(end_point, None, config.clone(),transport)))
+        Ok(Box::new(ClientConnection::new(endpoint.clone(), None, config.clone(),transport)))
     }
 
 }

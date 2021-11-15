@@ -28,17 +28,18 @@ fn init() {
 
 #[test]
 fn build_simple_request() {
-    let request = RequestBuilder::get("Http://web.myservice.com").build();
-    assert_eq!("Http://web.myservice.com", request.url);
+    let request = RequestBuilder::get("http://web.myservice.com").build();
+
+    assert_eq!("http://web.myservice.com", request.url.as_str());
     assert_eq!(HttpMethod::GET, request.method);
 }
 
 #[test]
 fn request_header_1() {
-    let request = RequestBuilder::get("Http://web.myservice.com")
+    let request = RequestBuilder::get("http://web.myservice.com")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .build();
-
+    
     assert_eq!(HttpMethod::GET, request.method);
     assert_eq!(&CONTENT_TYPE_JSON, request.headers.get("accept").unwrap())
 }
@@ -80,8 +81,6 @@ fn request_cookie_2() {
 
     assert_eq!(HttpMethod::GET, request.method);
     assert_eq!(&"1234", request.cookies.get("name").unwrap());
-
-
 }
 
 
@@ -104,12 +103,12 @@ fn build_request_2() {
         surname: "Smith"
     };
 
-    let request = RequestBuilder::post("ttp://web.myservice.com/user")
+    let request = RequestBuilder::post("http://web.myservice.com/user")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .param("id", "12345")
         .json(&data)
         .build();
-
+    
     assert_eq!(HttpMethod::POST, request.method);
     assert_eq!(&CONTENT_TYPE_JSON, request.headers.get(ACCEPT).unwrap());
 
@@ -118,34 +117,34 @@ fn build_request_2() {
 
 #[test]
 fn test_url_ok1() {
-    assert_eq!(parse_url("http://web.myservice.com/user").is_ok(), true);
+    assert!(parse_url("http://web.myservice.com/user").is_ok());
 }
 
 #[test]
 fn test_url_ok2() {
-    assert_eq!(parse_url("Http://web.myservice.com/user").is_ok(), true);
+    assert!(parse_url("Http://web.myservice.com/user").is_ok());
 } 
 
 #[test]
 fn test_url_ok3() {
-    assert_eq!(parse_url("HTTP://WEB.MYSERVICE.COM/user").is_ok(), true);
+    assert!(parse_url("HTTP://WEB.MYSERVICE.COM/user").is_ok());
 } 
 
 #[test]
 fn test_url_ok4() {
-    assert_eq!(parse_url("https://web.myservice.com/user").is_ok(), true);
+    assert!(parse_url("https://web.myservice.com/user").is_ok());
 }
 
 #[test]
 fn test_url_nok1() {
-    assert_eq!(parse_url("ftp://web.myservice.com/user").is_err(), false);
+    assert!(parse_url("ftp://web.myservice.com/user").is_err());
 }
 
 #[test]
 fn test_echo1() {
     let mut request =
         RequestBuilder::get("http://localhost:8080/user").build();
-
+    
     let response = request.send();
 
     assert!(response.is_ok());
@@ -161,11 +160,12 @@ fn test_echo2() {
         surname: "Smith"
     };
 
-    let result = RequestBuilder::get("http://localhost:8080/user")
+    let mut request = RequestBuilder::get("http://localhost:8080/user")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .json(&data)
-        .build()
-        .send();
+        .build();
+
+    let result = request.send();
 
     assert!(result.is_ok());
 
@@ -191,12 +191,12 @@ fn test_echo2() {
 fn test_ip() {
 
     init();
-    let result = RequestBuilder::get("http://ip-api.com/json/")
-        .header(ACCEPT, CONTENT_TYPE_JSON)
-        .param("fields", "24576")
-        .build()
-        .send();
+    let mut request =  RequestBuilder::get("http://ip-api.com/json/")
+    .header(ACCEPT, CONTENT_TYPE_JSON)
+    .param("fields", "24576")
+    .build();
 
+    let result = request.send();
 
     if let Some(e) = result.as_ref().err(){
         println!("{}", e);
@@ -227,25 +227,26 @@ fn test_ip() {
 }
 
 use std::result::Result;
+use std::io::Error;
 
-fn request_boreapy_with_config(config: &HttpConfig) -> Result<Response, crate::Error> {
-    return RequestBuilder::get("https://www.boredapi.com/api/activity")
+fn request_boreapy_with_config(config: &HttpConfig) -> Result<Response, Error> {
+    RequestBuilder::get("https://www.boredapi.com/api/activity")
         .header(ACCEPT, CONTENT_TYPE_JSON)
         .param("participants", "2")
         .config(&config)
-        .build()        
-        .send();
+        .build()
+        .send()
 }
 
-fn request_local_with_config(config: &HttpConfig) -> Result<Response, crate::Error> {
+fn request_local_with_config(config: &HttpConfig) -> Result<Response, Error> {
     return RequestBuilder::get("https://localhost:4443/user.json")
         .header(ACCEPT, "*/*")
         .config(&config)
         .build()        
-        .send();
+        .send()
 }
 
-fn http_boreapy_ok(result: Result<Response, crate::Error>) {
+fn http_boreapy_ok(result: Result<Response, Error>) {
     if let Some(e) = result.as_ref().err(){
         println!("{}", e);
     }
@@ -276,7 +277,7 @@ fn http_boreapy_ok(result: Result<Response, crate::Error>) {
 
 }
 
-fn http_local_ok(result: Result<Response, crate::Error>) {
+fn http_local_ok(result: Result<Response, Error>) {
     if let Some(e) = result.as_ref().err(){
         println!("{}", e);
     }
@@ -487,6 +488,30 @@ fn test_https_no_verify() {
     let result = request_boreapy_with_config(&config);
 
     http_boreapy_ok(result);
+  
+
+}
+
+
+#[test]
+fn test_session() {
+
+    init();
+
+    let session = SessionBuilder::new()
+        .build();
+
+    let mut request1 = session.get("https://www.google.com")
+        .header("Accept", "identity")
+        .build();
+
+    let response1 = request1.send();
+
+    if response1.is_err() {
+        println!("{}", response1.as_ref().err().unwrap());
+    }
+
+    assert!(response1.is_ok());
   
 
 }

@@ -34,6 +34,18 @@ macro_rules! assert_invalid_data {
     };
 }
 
+const TEST_DOMAIN: &str = "test.com";
+const TEST_SUBDOMAIN: &str = "www.test.com";
+const TEST_OTHER_DOMAIN: &str = "test.es";
+const TEST_DOT_DOMAIN: &str = "est.com";
+const TEST_ROOT_PATH: &str = "/";
+const TEST_PATH: &str = "/users/";
+const TEST_SUBPATH: &str = "/users/private";
+const TEST_OTHER_PATH: &str = "/public";
+
+const TEST_COOKIE_2: &str = "cookie2=222222; Secure";
+const TEST_COOKIE_3: &str = "cookie3=3333222; SameSite=None; Secure";
+
 #[test]
 fn test_parse_cookie_value_right1() {
     let right = "name=value";
@@ -282,6 +294,29 @@ fn test_parse_cookie_expires_right3() {
 }
 
 #[test]
+fn test_parse_cookie_expires_right4() {
+    let right = "Expires=Wed, 15-Nov-2023 09:13:29 GMT";
+    let result = CookieDirective::from_str(right);
+
+    if result.is_err() {
+        println!("{}", result.as_ref().err().unwrap());
+    }
+    assert!(result.is_ok());
+
+    if let CookieDirective::Expires(date) = result.unwrap() {
+        let naive =
+            NaiveDate::from_ymd(2023,11,15)
+            .and_hms(9,13,29);
+        let time = DateTime::<Utc>::from_utc(naive, Utc);
+        let millis = Duration::from_millis(time.timestamp_millis() as u64);
+        let expired = UNIX_EPOCH.clone().add(millis);
+        assert_eq!(date,expired);
+    } else {
+        assert!(false, "Expected CookieDirective::Expires")
+    }
+}
+
+#[test]
 fn test_parse_cookie_expires_wrong1() {
     let right = "Expires=21 Octubre 2015 07:28:00 UTC";
     let result = CookieDirective::from_str(right);
@@ -416,4 +451,133 @@ fn test_parse_cookie_domain_wrong1() {
     let result = CookieDirective::from_str(right);
 
     assert_invalid_data!(result);
+}
+
+fn test_cookie_path(creator_path: &str, target_path: &str, success: bool) {
+    
+    let mut jar = MemCookieJar::new();
+
+    let cookie1 = Cookie::parse(format!("cookie1=122343; Path= {}", creator_path).as_str(), TEST_DOMAIN, creator_path);
+        
+    assert!(cookie1.is_ok());
+
+    jar.cookie(cookie1.unwrap(), TEST_DOMAIN);
+
+    let cookies = jar.active_cookies(TEST_DOMAIN, target_path, true);
+
+    if success {
+        assert_eq!(cookies.len(), 1);
+
+        assert_eq!(cookies.get(0).unwrap().0, "cookie1");
+        assert_eq!(cookies.get(0).unwrap().1, "122343");
+    } else {
+        assert_eq!(cookies.len(), 0);
+    }
+}
+
+#[test]
+fn test_mem_cookie_jar_path1() {
+    test_cookie_path(TEST_SUBPATH, TEST_OTHER_PATH, false);    
+}
+
+#[test]
+fn test_mem_cookie_jar_path2() {
+    test_cookie_path(TEST_PATH, TEST_SUBPATH, true);
+}
+
+#[test]
+fn test_mem_cookie_jar_path3(){
+    test_cookie_path(TEST_SUBPATH,TEST_PATH, false);
+}
+
+#[test]
+fn test_mem_cookie_jar_path4() {
+    test_cookie_path(TEST_SUBPATH, TEST_OTHER_PATH, false);    
+}
+
+#[test]
+fn test_cookie_match1() {
+    let cookie1 = Cookie::parse("cookie1=122343; Domain=b.a", "b.a", "/");
+    assert!(cookie1.is_ok());
+    assert!(cookie1.unwrap().domain_match("b.a"));
+}
+
+#[test]
+fn test_cookie_match2() {
+    let cookie1 = Cookie::parse("cookie1=122343; Domain=b.a", "b.a", "/");
+    assert!(cookie1.is_ok());
+    assert!(cookie1.unwrap().domain_match("c.b.a"));
+}
+
+#[test]
+fn test_cookie_match3() {
+    let cookie1 = Cookie::parse("cookie1=122343; Domain=b.a", "b.a", "/");
+    assert!(cookie1.is_ok());
+    assert!(cookie1.unwrap().domain_match("d.c.b.a"));
+}
+
+#[test]
+fn test_cookie_match4() {
+    let cookie1 = Cookie::parse("cookie1=122343; Domain=b.a", "b.a", "/");
+    assert!(cookie1.is_ok());
+    assert!(!cookie1.unwrap().domain_match("xb.a"));
+}
+#[test]
+fn test_cookie_match5() {
+    let cookie1 = Cookie::parse("cookie1=122343; Domain=b.a", "b.a", "/");
+    assert!(cookie1.is_ok());
+    assert!(!cookie1.unwrap().domain_match("x.a"));
+}
+
+#[test]
+fn test_cookie_match6() {
+    let cookie1 = Cookie::parse("cookie1=122343; Domain=c.b.a", "b.a", "/");
+    assert!(cookie1.is_ok());
+    assert!(!cookie1.unwrap().domain_match("b.a"));
+}
+
+fn test_cookie_domain(init_request_domain: &str, init_cookie_domain: &str, target_domain: &str, success: bool) {
+    let mut jar = MemCookieJar::new();
+
+    let cookie1 = Cookie::parse(format!("cookie1=122343; Domain={}", init_cookie_domain).as_str(), init_request_domain, TEST_PATH);
+
+    assert!(cookie1.is_ok());
+
+    jar.cookie(cookie1.unwrap(), init_request_domain);
+
+    let cookies = jar.active_cookies(target_domain, TEST_PATH, false);
+
+    // Cookie is discarded as the request is not secure
+    assert_eq!(cookies.len(), if success {1} else {0}, "Cookie create by {}, with domain {} for target {}", init_request_domain, init_cookie_domain, target_domain);
+
+}
+
+#[test]
+fn test_mem_cookie_domain1() {
+    test_cookie_domain(TEST_DOMAIN, TEST_DOMAIN, TEST_DOMAIN, true);
+}
+
+#[test]
+fn test_mem_cookie_domain2() {
+    test_cookie_domain(TEST_SUBDOMAIN, TEST_DOMAIN, TEST_DOMAIN , true);
+}
+
+#[test]
+fn test_mem_cookie_domain3() {
+    test_cookie_domain(TEST_SUBDOMAIN, TEST_SUBDOMAIN, TEST_DOMAIN, false);
+}
+
+#[test]
+fn test_mem_cookie_domain4() {
+    test_cookie_domain(TEST_DOMAIN, TEST_SUBDOMAIN, TEST_SUBDOMAIN, false);
+}
+
+#[test]
+fn test_mem_cookie_domain5() {
+    test_cookie_domain(TEST_DOMAIN, TEST_DOMAIN, TEST_SUBDOMAIN, true);
+}
+
+#[test]
+fn test_mem_cookie_domain6() {
+    test_cookie_domain(TEST_DOMAIN, TEST_DOMAIN, TEST_OTHER_DOMAIN, false);
 }
