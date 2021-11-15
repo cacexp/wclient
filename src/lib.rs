@@ -266,7 +266,7 @@ pub struct Request {
     /// Request headers
     pub(crate) headers: CaseInsensitiveHashMap<String>,
     /// CookieJar to get/save cookies
-    pub (crate) jar: Arc<Mutex<dyn CookieJar>>,
+    pub (crate) jar: Option<Arc<Mutex<dyn CookieJar>>>,
     // Request Cookies
     pub(crate) cookies: HashMap<String, String>,
     /// Request params
@@ -316,18 +316,23 @@ impl Request {
 
         let endpoint = self.endpoint.as_ref().unwrap();
 
-        // Get applicable cookies from cookie jar, request cookies have prevalence over cookie jar's ones
-        let active_cookies = self.jar.lock().as_mut().unwrap().active_cookies(endpoint.host.as_str(), &self.path, endpoint.scheme == HttpScheme::HTTPS);
+        // Get cookies from cookie jar (if any)
+        if let Some(ref cookie_jar) = self.jar {
+            let active_cookies = cookie_jar.lock().as_mut().unwrap().active_cookies(endpoint.host.as_str(), &self.path, endpoint.scheme == HttpScheme::HTTPS);
 
-        for cookie in active_cookies {
-            if self.cookies.contains_key(&cookie.0) {
-                continue;
-            }
+            for cookie in active_cookies {
+                            // request cookies have prevalence over cookie jar's ones
 
-            self.cookies.insert(cookie.0, cookie.1);
+                if self.cookies.contains_key(&cookie.0) {
+                    continue;
+                }
 
+                self.cookies.insert(cookie.0, cookie.1);
         }
 
+
+        }
+        
         let mut connection =
             ClientConnectionFactory::client_connection(
                 endpoint,
@@ -520,7 +525,7 @@ impl RequestBuilder {
     }
 
     /// Creates a [Request](crate::Request) struct.
-    pub fn build(mut self) -> Request {
+    pub fn build(self) -> Request {
 
         let mut init_error: Option<Error> = None;
         let mut endpoint_holder: Option<EndPoint> = None;
@@ -548,10 +553,6 @@ impl RequestBuilder {
             init_error = url.err();
         } 
 
-        if self.jar.is_none() {
-            self.jar = Some(Arc::new(Mutex::new(MemCookieJar::new())));
-        }
-
         Request {
             method: self.method,
             url: self.url,
@@ -559,7 +560,7 @@ impl RequestBuilder {
             path, 
             config: self.config,
             headers: self.headers,
-            jar: self.jar.unwrap().clone(),
+            jar: self.jar,
             cookies: self.cookies,
             params: self.params,
             body: self.body,

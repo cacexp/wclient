@@ -501,17 +501,22 @@ fn test_session() {
     let session = SessionBuilder::new()
         .build();
 
-    let mut request1 = session.get("https://www.google.com")
+    let mut request1 = session.get("https://en.wikipedia.org")
         .header("Accept", "identity")
         .build();
 
     let response1 = request1.send();
-
-    if response1.is_err() {
-        println!("{}", response1.as_ref().err().unwrap());
-    }
-
+    
     assert!(response1.is_ok());
-  
 
+    let cookies1 = session.cookie_jar().lock().unwrap().active_cookies("en.wikipedia.org", "/", true);
+
+    assert_eq!(cookies1.len(),1);
+
+    let cookies2 = session.cookie_jar().lock().unwrap().active_cookies("wikipedia.org", "/", true);
+
+    assert_eq!(cookies2.len(),1);
+
+
+  
 }

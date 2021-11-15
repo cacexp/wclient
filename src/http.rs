@@ -304,6 +304,16 @@ impl ClientConnection  {
             }
         }
 
+        
+        // Save cookies in cookie jar (if any)
+        if let Some(ref cookie_jar) = request.jar {
+            let mut jar = cookie_jar.as_ref().lock().unwrap();
+            for cookie in &response.cookies {
+                jar.cookie(cookie.clone(), host);
+            }
+        }
+        
+
         return Ok(response);
     }
 
