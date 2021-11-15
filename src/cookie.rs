@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Utc;
+use chrono::NaiveDate;
+use std::time::UNIX_EPOCH;
+use chrono::DateTime;
 use std::str::FromStr;
 use std::io::{Error, ErrorKind};
-use httpdate::parse_http_date;
 use std::time::{Duration, SystemTime};
 use std::ops::Add;
 use std::collections::{HashMap, HashSet};
 use std::cmp::{PartialEq, Eq};
 use std::hash::{Hash, Hasher};
+use lazy_static::lazy_static;
+use regex::Regex;
 
 pub(crate) const COOKIE: &str = "cookie";
 pub(crate) const COOKIE_EXPIRES: &str = "expires";
@@ -307,6 +312,170 @@ enum CookieDirective {
     Extension(String, String)
 }
 
+// 
+const DATE_FORMAT_850: &str= "(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun), \
+(0[1-9]|[123][0-9])-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-([0-9]{4}|[0-9]{2}) \
+([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]) GMT";
+
+// Regex for dates Sun, 06 Nov 1994 08:49:37 GMT
+const DATE_FORMAT_1123: &str= "(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \
+(0[1-9]|[123][0-9]) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) ([0-9]{4}) \
+([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]) GMT";
+
+
+// Regex for dates Sun Nov 6 08:49:37 1994 
+const DATE_FORMAT_ASCT: &str= "(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \
+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[ ]{1,2}([1-9]|0[1-9]|[123][0-9]) \
+([0-1][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]) ([0-9]{4})";
+
+/// Parses RFC 850 dates, with extension. 
+/// For example,  `Wed, 15-Nov-23 09:13:29 GMT` and  `Wed, 15-Nov-23 09:13:29 GMT` 
+/// or `Sunday, 06-Nov-94 08:49:37 GMT` dates.
+fn parse_rfc_850_date(date: &str) -> Result<SystemTime, Error> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(DATE_FORMAT_850).unwrap();
+    }
+
+    
+    if let Some(captures) = RE.captures(date) {
+        // Capture 0 is the full match and  1 is the day of the week name
+        let day : u32 = captures.get(2).unwrap().as_str().parse().unwrap();
+        let month = match captures.get(3).unwrap().as_str() {
+            "Jan" => 1,
+            "Feb" => 2,
+            "Mar" => 3,
+            "Apr" => 4,
+            "May" => 5,
+            "Jun" => 6,
+            "Jul" => 7,
+            "Aug" => 8,
+            "Sep" => 9,
+            "Oct" => 10,
+            "Nov" => 11,
+            "Dec" => 12,
+            _ => return Err(Error::new(ErrorKind::InvalidData, "Invalid date"))
+        };
+
+        let mut year: i32 = captures.get(4).unwrap().as_str().parse().unwrap();
+        // Fix millenium, for 2 digit year
+        year+= if year < 70 {2000} else if year < 100 {1900} else {0};
+
+        let hour : u32 = captures.get(5).unwrap().as_str().parse().unwrap();
+        let min : u32 = captures.get(6).unwrap().as_str().parse().unwrap();
+        let secs : u32 = captures.get(7).unwrap().as_str().parse().unwrap();
+
+        let naive =
+            NaiveDate::from_ymd(year, month, day)
+            .and_hms(hour,min,secs);
+        let time = DateTime::<Utc>::from_utc(naive, Utc);
+        let millis = Duration::from_millis(time.timestamp_millis() as u64);
+        let time = UNIX_EPOCH.clone().add(millis);
+
+        return Ok(time);
+
+
+    } else {
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid date"));
+    }
+}
+
+/// Parses RFC 1123 dates. 
+/// For example,  `Sun, 06 Nov 1994 08:49:37 GMT` date.
+fn parse_rfc_1123_date(date: &str) -> Result<SystemTime, Error> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(DATE_FORMAT_1123).unwrap();
+    }
+
+    
+    if let Some(captures) = RE.captures(date) {
+        // Capture 0 is the full match and  1 is the day of the week name
+        let day : u32 = captures.get(2).unwrap().as_str().parse().unwrap();
+        let month = match captures.get(3).unwrap().as_str() {
+            "Jan" => 1,
+            "Feb" => 2,
+            "Mar" => 3,
+            "Apr" => 4,
+            "May" => 5,
+            "Jun" => 6,
+            "Jul" => 7,
+            "Aug" => 8,
+            "Sep" => 9,
+            "Oct" => 10,
+            "Nov" => 11,
+            "Dec" => 12,
+            _ => return Err(Error::new(ErrorKind::InvalidData, "Invalid date"))
+        };
+
+        let year: i32 = captures.get(4).unwrap().as_str().parse().unwrap();
+
+        let hour : u32 = captures.get(5).unwrap().as_str().parse().unwrap();
+        let min : u32 = captures.get(6).unwrap().as_str().parse().unwrap();
+        let secs : u32 = captures.get(7).unwrap().as_str().parse().unwrap();
+
+        let naive =
+            NaiveDate::from_ymd(year, month, day)
+            .and_hms(hour,min,secs);
+        let time = DateTime::<Utc>::from_utc(naive, Utc);
+        let millis = Duration::from_millis(time.timestamp_millis() as u64);
+        let time = UNIX_EPOCH.clone().add(millis);
+
+        return Ok(time);
+
+
+    } else {
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid date"));
+    }
+}
+
+/// Parses Asct dates, with extension. 
+/// For example,  `Sun Nov 6 08:49:37 1994` dates.
+fn parse_asct_date(date: &str) -> Result<SystemTime, Error> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(DATE_FORMAT_ASCT).unwrap();
+    }
+
+    
+    if let Some(captures) = RE.captures(date) {
+        // Capture 0 is the full match and  1 is the day of the week name
+        let month = match captures.get(2).unwrap().as_str() {
+            "Jan" => 1,
+            "Feb" => 2,
+            "Mar" => 3,
+            "Apr" => 4,
+            "May" => 5,
+            "Jun" => 6,
+            "Jul" => 7,
+            "Aug" => 8,
+            "Sep" => 9,
+            "Oct" => 10,
+            "Nov" => 11,
+            "Dec" => 12,
+            _ => return Err(Error::new(ErrorKind::InvalidData, "Invalid date"))
+        };
+
+        let day : u32 = captures.get(3).unwrap().as_str().parse().unwrap();
+        
+        let hour : u32 = captures.get(4).unwrap().as_str().parse().unwrap();
+        let min :  u32 = captures.get(5).unwrap().as_str().parse().unwrap();
+        let secs : u32 = captures.get(6).unwrap().as_str().parse().unwrap();
+
+        let year: i32 = captures.get(7).unwrap().as_str().parse().unwrap();
+       
+        let naive =
+            NaiveDate::from_ymd(year, month, day)
+            .and_hms(hour,min,secs);
+        let time = DateTime::<Utc>::from_utc(naive, Utc);
+        let millis = Duration::from_millis(time.timestamp_millis() as u64);
+        let time = UNIX_EPOCH.clone().add(millis);
+
+        return Ok(time);
+
+
+    } else {
+        return Err(Error::new(ErrorKind::InvalidData, "Invalid date"));
+    }
+}
+
 /// Helper function to parse `CookieDirective`
 impl FromStr for CookieDirective {
     
@@ -318,7 +487,10 @@ impl FromStr for CookieDirective {
             let value = s[index + 1..].trim();
             return match key.as_str() {
                 COOKIE_EXPIRES => {
-                    let expires = parse_http_date(value).or_else (|_| Err(Error::new(ErrorKind::InvalidData, format!("Invalid date: {}", s))))?;                    
+                    let expires = parse_rfc_1123_date(value)
+                        .or_else(|_| parse_rfc_850_date(value))
+                        .or_else(|_| parse_asct_date(value))?; 
+
                     Ok(CookieDirective::Expires(expires))
                 },
                 COOKIE_MAX_AGE => {  // Max-age value in seconds

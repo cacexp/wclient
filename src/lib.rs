@@ -154,9 +154,11 @@
 //! 
 //! ```no_run
 //! 
-//! use wclient::{HttpConfigBuilder, SessionBuilder};
+//! use wclient::SessionBuilder;
+//! use wclient::config::{HttpsCert,HttpConfigBuilder};
 //! 
-//! let config = HttConfigBuilder::default()
+//! 
+//! let config = HttpConfigBuilder::default()
 //!    .cert(HttpsCert::CertKey{cert: String::from("/path/client.crt"), key: String::from("/path/client.key")})
 //!    .build();
 //!     
@@ -172,9 +174,9 @@
 //! ```no_run
 //! use wclient::SessionBuilder;
 //! 
-//! let session = SessionBuilder::new().build();
+//! let mut session = SessionBuilder::new().build();
 //! 
-//! let request = session.get("https://service.com/user").
+//! let mut request = session.get("https://service.com/user")
 //!     .header("Accept", "application/json")
 //!     .build();
 //! 
@@ -665,7 +667,8 @@ impl Session {
 /// Usage example:
 /// 
 /// ```no_run
-/// use wclient::{SessionBuilder, HttpConfigBuilder};
+/// use wclient::SessionBuilder;
+/// use wclient::config::HttpConfigBuilder;
 /// 
 /// let config = HttpConfigBuilder::default()
 ///     // Set config here

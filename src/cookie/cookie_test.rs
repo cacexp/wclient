@@ -232,15 +232,15 @@ fn test_parse_cookie_samesite_wrong4() {
 
 #[test]
 fn test_parse_cookie_expires_right1() {
-    let right = "Expires=Wed, 21 Oct 2015 07:28:00 GMT";
+    let right = "Expires=Sun, 06 Nov 1994 08:49:37 GMT";
     let result = CookieDirective::from_str(right);
 
     assert!(result.is_ok());
 
     if let CookieDirective::Expires(date) = result.unwrap() {
         let naive =
-            NaiveDate::from_ymd(2015,10,21)
-            .and_hms(7,28,0);
+            NaiveDate::from_ymd(1994,11,6)
+            .and_hms(8,49,37);
         let time = DateTime::<Utc>::from_utc(naive, Utc);
         let millis = Duration::from_millis(time.timestamp_millis() as u64);
         let expired = UNIX_EPOCH.clone().add(millis);
@@ -252,14 +252,14 @@ fn test_parse_cookie_expires_right1() {
 
 #[test]
 fn test_parse_cookie_expires_right2() {
-    let right = "Expires=Sunday, 06-Nov-94 08:49:37 GMT";
+    let right = "Expires=Sunday, 06-Nov-1994 08:49:37 GMT";
     let result = CookieDirective::from_str(right);
    
     assert!(result.is_ok());
 
     if let CookieDirective::Expires(date) = result.unwrap() {
         let naive =
-            NaiveDate::from_ymd(1994,11,06)
+            NaiveDate::from_ymd(1994,11,6)
             .and_hms(8,49,37);
         let time = DateTime::<Utc>::from_utc(naive, Utc);
         let millis = Duration::from_millis(time.timestamp_millis() as u64);
@@ -272,7 +272,7 @@ fn test_parse_cookie_expires_right2() {
 
 #[test]
 fn test_parse_cookie_expires_right3() {
-    let right = "Expires=Sun Nov  6 08:49:37 1994";
+    let right = "Expires=Sun Nov 6 08:49:37 1994";
     let result = CookieDirective::from_str(right);
 
     if result.is_err() {
@@ -326,7 +326,7 @@ fn test_parse_cookie_expires_wrong1() {
 
 #[test]
 fn test_parse_cookie_expires_wrong2() {
-    let right = "Expires=21 Octubre 2015 07:28:00 +0200";
+    let right = "Expires=21 October 2015 07:28:00 +0200";
     let result = CookieDirective::from_str(right);
 
     assert_invalid_data!(result);
@@ -342,13 +342,6 @@ fn test_parse_cookie_expires_wrong3() {
 #[test]
 fn test_parse_cookie_expires_wrong4() {
     let right = "Expires=Sunday, 06-Nov-94 08:49:37 +0200";
-    let result = CookieDirective::from_str(right);
-
-    assert_invalid_data!(result);
-}
-#[test]
-fn test_parse_cookie_expires_wrong5() {
-    let right = "Expires=Sun, 06-Nov-94 08:49:37 GMT";
     let result = CookieDirective::from_str(right);
 
     assert_invalid_data!(result);
