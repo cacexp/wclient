@@ -22,8 +22,10 @@ use std::io::{Write, Read, Error, ErrorKind};
 use std::net::{TcpStream, Shutdown};
 use log::*;
 
+
+
 /// Base trait for [ClientConnection](crate::http::ClientConnection) , it will be implemented for HTTP and HTTPS
-pub (crate) trait Transport : Write + Read {
+pub (crate) trait Transport : Write + Read + Send {
     /// Target host
     fn host(&self) -> &str;
     /// Target port
@@ -42,12 +44,17 @@ pub (crate) struct TcpTransport {
 }
 
 impl TcpTransport {
-    pub (crate) fn open(host: &str, port: u16, _config: &HttpConfig) -> Result<Self, Error> {
+    pub (crate) fn open(host: &str, port: u16, config: &HttpConfig) -> Result<Self, Error> {
         info!("Opening Connection with server {:?}", host);
 
         let socket = TcpStream::connect((host, port))?;
 
         socket.set_nodelay(true)?;
+
+        if let Some(timeout) = config.timeout {
+            socket.set_read_timeout(Some(timeout))?;
+            socket.set_write_timeout(Some(timeout))?;
+        }
 
         Ok(TcpTransport {
             host: String::from(host),
@@ -195,7 +202,7 @@ impl Read for TlsTransport {
             }
         }
 
-        self.tls.reader().read(buf)
+        self.tls.reader().read(buf)        
     }
 }
 
@@ -218,12 +225,11 @@ impl Write for TlsTransport {
         
         let _ = self.tls.complete_io(&mut self.tcp);
 
-        Ok(len)
+        Ok(len) 
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         // Code extracted from rustls::Stream
-
         self.complete_prior_io()?;
 
         self.tls.writer().flush()?;

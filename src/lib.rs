@@ -26,10 +26,11 @@
 //! * HTTPS (v1.1) with default site certificate verification (only with host CA certificates)
 //! * HTTPS custom site certificate validation (local directory or certificate chain) in *.pem format
 //! * HTTPS client certificate authentication
+//! * HTTP Connection pooling
 //!
 //! # Future Features
 //! * Multipart
-//! * HTTP Connection pooling
+//! * HTTP 2.0
 //!  
 //! # User Guide
 //! 
@@ -275,6 +276,8 @@ pub struct Request {
     pub(crate) params: HashMap<String, String>,
     /// Request body (not implemented multi-part yet)
     pub(crate) body: Vec<u8>,
+    /// Session's connection factory
+    factory: Option<Arc<Mutex<ClientConnectionFactory>>>,
     /// On-build error
     init_error: Option<Error>
 }
@@ -330,17 +333,16 @@ impl Request {
                 }
 
                 self.cookies.insert(cookie.0, cookie.1);
+            }
         }
 
-
-        }
+        let connection = if let Some(ref factory) = &self.factory {
+            factory.lock().unwrap().get_connection(endpoint, &self.config)?
+        } else {
+            ClientConnectionFactory::client_connection(endpoint, &self.config)?
+        };
         
-        let mut connection =
-            ClientConnectionFactory::client_connection(
-                endpoint,
-                &self.config)?;
-        
-        connection.send(self)
+        return connection.lock().unwrap().send(self);
         
     }
 }
@@ -381,7 +383,8 @@ pub struct RequestBuilder {
     params: HashMap<String, String>,
     /// Request body (not implemented multi-part yet)
     body: Vec<u8>,
-    
+    /// Session's connection factory
+    factory: Option<Arc<Mutex<ClientConnectionFactory>>>    
 }
 
 impl RequestBuilder {
@@ -395,7 +398,8 @@ impl RequestBuilder {
             jar: None,
             cookies: HashMap::new(),
             params: HashMap::new(),
-            body: Vec::new()
+            body: Vec::new(),
+            factory: None
         }
     }
 
@@ -526,6 +530,12 @@ impl RequestBuilder {
         self
     }
 
+    /// Sets Connection Factory
+    fn factory(mut self, factory: Arc<Mutex<ClientConnectionFactory>>) -> RequestBuilder {
+        self.factory = Some(factory);
+        self
+    }
+
     /// Creates a [Request](crate::Request) struct.
     pub fn build(self) -> Request {
 
@@ -566,6 +576,7 @@ impl RequestBuilder {
             cookies: self.cookies,
             params: self.params,
             body: self.body,
+            factory: self.factory,
             init_error
         }
     }
@@ -582,7 +593,8 @@ impl RequestBuilder {
 /// 
 pub struct Session {
     config: HttpConfig,
-    jar: Arc<Mutex<dyn CookieJar>>
+    jar: Arc<Mutex<dyn CookieJar>>,
+    factory: Arc<Mutex<ClientConnectionFactory>>
 }
 
 impl Session {
@@ -717,7 +729,8 @@ impl SessionBuilder {
         }
         Session {
             config: self.config.unwrap(),
-            jar: self.jar.unwrap().clone()
+            jar: self.jar.unwrap().clone(),
+            factory: Arc::new(Mutex::new(ClientConnectionFactory::new()))
         }
     }
 }

@@ -130,6 +130,11 @@ impl ClientConnection  {
         }
     }
 
+    /// Checks whether the transport connection is open
+    pub(crate) fn is_open(&self) -> bool {
+        self.transport.is_open()
+    }
+
     /// Sends a [Request](crate::Request) to the target server
     pub(crate) fn send(&mut self, request: &Request) -> Result<Response, Error> {
         if ! self.transport.is_open() {
@@ -144,9 +149,15 @@ impl ClientConnection  {
 
         let bytes = buffer.into_inner().unwrap();
 
-        self.transport.write(bytes.as_slice())?;
+        if let Err(error) = self.transport.write(bytes.as_slice()) {
+            self.transport.close();
+            return Err(error);
+        }
 
-        self.transport.flush()?;
+        if let Err(error) = self.transport.flush() {
+            self.transport.close();
+            return Err(error);
+        }
 
         if log_enabled!(Level::Debug) {
             let string = String::from_utf8(bytes).unwrap();
@@ -158,17 +169,14 @@ impl ClientConnection  {
 
     /// Close the connection
     fn close(&mut self) {
-        // TODO make thread-safe 
-        if!self.transport.is_open() {       
-            self.transport.close();
-        }
+        self.transport.close();
     }
 
     fn write_http11(writer: &mut impl Write, request: &Request) -> Result<(), Error> {
 
          
         let endpoint = request.endpoint()?;
-        
+    
         write!(writer, "{} {}",
                request.method,
                request.path())?;
@@ -208,6 +216,10 @@ impl ClientConnection  {
             write!(writer, "{}: {}\r\n", key, value)?;
         }
 
+        if request.factory.is_some() && !request.headers.contains_key("Connection") {
+            write!(writer, "Connection: close\r\n")?;
+        }
+
         if request.has_body() {
             let body = &request.body;
             write!(writer, "Content-Length: {}\r\n\r\n", body.len())?; // Empty line: end of metadata
@@ -233,6 +245,7 @@ impl ClientConnection  {
         buffer.read_line(&mut line)?;
 
         if line.len() == 0 {
+            self.transport.close();
             error!("HTTPConnection::receive Connection is closed");
             // Connection Closed
             return Err(Error::new(ErrorKind::BrokenPipe, "Connection closed"));
@@ -268,7 +281,10 @@ impl ClientConnection  {
 
                     response.headers.insert(key, value);
                 }
-                Err(e) => return Err(e)
+                Err(e) => {
+                    self.transport.close();
+                    return Err(e)
+                }
             }
         }
 
@@ -313,6 +329,11 @@ impl ClientConnection  {
             }
         }
         
+        // Close connection if server requests it
+        if response.headers.contains_key("Connection") && 
+           response.headers.get("Connection").unwrap() == "close" {
+               self.transport.close();
+           }
 
         return Ok(response);
     }
@@ -370,15 +391,19 @@ impl Drop for ClientConnection {
     }
 }
 
-
 /// Factory for [ClientConnection]
-/// 
-/// TODO: To make connection pooling and thread-safe
 pub(crate) struct ClientConnectionFactory {
+    connections: HashMap<EndPoint, Arc<Mutex<ClientConnection>>>
 }
 
 impl ClientConnectionFactory {
 
+    pub(crate) fn new () -> ClientConnectionFactory{
+        ClientConnectionFactory {
+            connections: HashMap::new()
+        }
+    }
+   
     /// Allocates the [Tranport](crate::http::transport::Transport) based on the endpont [HttpScheme](crate::http::HttpScheme)
     fn make_transport(end_point: &EndPoint,
                       config: &HttpConfig) -> Result<Box<dyn Transport>, Error> {
@@ -389,17 +414,34 @@ impl ClientConnectionFactory {
         }
     }
 
-    /// Creates a client connection based on Http version and schema (Http or https).
-    /// 
-    /// Returns a shareable refcount pointer `Arc<ClientConnection>` to be prepared to reuse
-    /// connections with HTTP 1.1 and later
-    pub(crate) fn client_connection(endpoint: &EndPoint, 
-                                    config: &HttpConfig) -> Result<Box<ClientConnection>, Error>
+    pub(crate) fn get_connection(&mut self,
+                     endpoint: &EndPoint,
+                     config: &HttpConfig) -> Result<Arc<Mutex<ClientConnection>>, Error> 
     {
-        
-        let transport = Self::make_transport(endpoint, config)?;
+       
+        if self.connections.contains_key(endpoint) {
+            let connection = Arc::clone(self.connections.get(endpoint).as_ref().unwrap());
+            if connection.lock().unwrap().is_open() {
+                return Ok(connection);
+            }
+        }
 
-        Ok(Box::new(ClientConnection::new(endpoint.clone(), None, config.clone(),transport)))
+        // Create a new connection because it wasn't any for endpoint or it is closed
+
+        let transport = Self::make_transport(endpoint, config)?;
+            let fresh_connection = Arc::new(Mutex::new(ClientConnection::new(endpoint.clone(), None, config.clone(),transport)));
+            self.connections.insert(endpoint.clone(), fresh_connection.clone());
+            return Ok(fresh_connection);
     }
 
+    /// Creates a client connection based on Http version and schema (Http or https).
+    /// 
+    /// Returns a shareable refcount pointer `Arc<Mutex<ClientConnection>>` to be prepared to reuse
+    /// connections with HTTP 1.1 and later
+    pub(crate) fn client_connection(endpoint: &EndPoint, 
+                                    config: &HttpConfig) -> Result<Arc<Mutex<ClientConnection>>, Error>
+    {
+        let transport = Self::make_transport(endpoint, config)?;
+        Ok(Arc::new(Mutex::new(ClientConnection::new(endpoint.clone(), None, config.clone(),transport))))
+    }
 }

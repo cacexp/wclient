@@ -23,7 +23,7 @@
 use std::time::Duration;
 
 /// HTTPS Configuration to verify server's certificate
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum HttpsVerify {
     /// Verify using default CA bundle (default value)
     True,
@@ -36,7 +36,7 @@ pub enum HttpsVerify {
 }
 
 /// HTTPS configuration to set Client certificate
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub enum HttpsCert {
     /// Do not use client certificate (default value)
     None,    
@@ -47,7 +47,7 @@ pub enum HttpsCert {
 }
 
 /// HTTP Configuration
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct HttpConfig {
     /// Connecton, write and read timeout for a TCP socket
     pub timeout: Option<Duration>,
