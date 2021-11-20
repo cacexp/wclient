@@ -21,7 +21,7 @@ pub fn main() {
 
     assert_eq!(response.status_code(), 200);
 
-    assert_eq!(response.headers()["Content-Type"], "application/json");
+    assert_eq!(response.headers()["Content-Type"], "application/json; charset=utf-8");
     let result_json = response.json();
 
     if let Some(e) = result_json.as_ref().err(){

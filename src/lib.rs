@@ -34,6 +34,8 @@
 //!  
 //! # User Guide
 //! 
+//! You can find some examples at [GitHub project examples](https://github.com/cacexp/wclient/tree/master/examples).
+//! 
 //! To create a `Request`, it is needed a [RequestBuilder](crate::RequestBuilder). 
 //! 
 //! The `RequestBuilder` has constructor functions for each HTTP method that requires the target `url` string: [connect](crate::RequestBuilder::connect),
@@ -148,7 +150,8 @@
 //! 
 //! ## HTTP Sessions
 //! 
-//! The [Session](crate::Session) type allows to store common configurations and share cookies through an internal or custom set cookie jar.
+//! The [Session](crate::Session) type allows to store common configurations and share cookies through an internal or custom set cookie jar. The `Session`
+//! object also makes connection pooling, reusing the same connection to send different requests (if server allows it).
 //! 
 //! `Session` values are constructed through the [SessionBuilder](crate::SessionBuilder) builder that allows to set a `HttpConfig` value 
 //! and a shared pointer to a shared `CookieJar` trait implementation.
