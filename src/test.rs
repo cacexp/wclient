@@ -509,14 +509,38 @@ fn test_session() {
     
     assert!(response1.is_ok());
 
-    let cookies1 = session.cookie_jar().lock().unwrap().active_cookies("en.wikipedia.org", "/", true);
+    let cookies1 = session.jar.lock().unwrap().active_cookies("en.wikipedia.org", "/", true);
 
     assert_eq!(cookies1.len(),1);
 
-    let cookies2 = session.cookie_jar().lock().unwrap().active_cookies("wikipedia.org", "/", true);
+    let cookies2 = session.jar.lock().unwrap().active_cookies("wikipedia.org", "/", true);
 
     assert_eq!(cookies2.len(),1);
+ 
+}
 
+#[test]
+fn test_session_connections1() {
 
-  
+    init();
+
+    let session = SessionBuilder::new()
+        .build();
+
+    
+    let mut request1 = session.get("https://en.wikipedia.org")
+        .header("Accept", "identity")
+        .build();
+
+    let response1 = request1.send();
+    
+    assert!(response1.is_ok());
+
+    let mut request2 = session.get("https://en.wikipedia.org")
+        .header("Accept", "identity")
+        .build();
+
+    let response2 = request2.send();
+    
+    assert!(response2.is_ok());
 }
