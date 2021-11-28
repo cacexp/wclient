@@ -191,14 +191,20 @@
 
 #![allow(dead_code)]
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod config;
 
 pub mod cookie;
+
+pub mod auth;
 
 mod constants;
 
 mod http;
 
+use crate::auth::AuthManager;
 use std::sync::Mutex;
 use crate::cookie::MemCookieJar;
 use crate::cookie::CookieJar;
@@ -281,6 +287,8 @@ pub struct Request {
     pub(crate) body: Vec<u8>,
     /// Session's connection factory
     factory: Option<Arc<Mutex<ClientConnectionFactory>>>,
+    /// Session's Auth Manager
+    auth: Option<Arc<Mutex<dyn AuthManager>>>,
     /// On-build error
     init_error: Option<Error>
 }
@@ -387,7 +395,9 @@ pub struct RequestBuilder {
     /// Request body (not implemented multi-part yet)
     body: Vec<u8>,
     /// Session's connection factory
-    factory: Option<Arc<Mutex<ClientConnectionFactory>>>    
+    factory: Option<Arc<Mutex<ClientConnectionFactory>>>,
+     /// Session's Auth Manager
+    auth: Option<Arc<Mutex<dyn AuthManager>>>
 }
 
 impl RequestBuilder {
@@ -402,7 +412,8 @@ impl RequestBuilder {
             cookies: HashMap::new(),
             params: HashMap::new(),
             body: Vec::new(),
-            factory: None
+            factory: None,
+            auth: None
         }
     }
 
@@ -533,9 +544,26 @@ impl RequestBuilder {
         self
     }
 
+    /// Transfers session config and references to the Request
+    fn session(mut self, session: &Session) -> RequestBuilder {
+        self.config = session.config.clone();
+        self.jar = Some(session.jar.clone());
+        self.factory = Some(Arc::clone(&session.factory));
+        if let Some(ref auth) = session.auth {
+            self.auth = Some(Arc::clone(auth));
+        }
+        self
+    }
+
     /// Sets Connection Factory
-    fn factory(mut self, factory: Arc<Mutex<ClientConnectionFactory>>) -> RequestBuilder {
+    pub(crate) fn factory(mut self, factory: Arc<Mutex<ClientConnectionFactory>>) -> RequestBuilder {
         self.factory = Some(factory);
+        self
+    }
+
+    /// Sets Connection Authenticator for `401 Not Authorized` responses with `WWW-Authenticate` headers 
+    pub fn auth(mut self, mgr: Arc<Mutex<dyn AuthManager>>) -> RequestBuilder {
+        self.auth = Some(mgr);
         self
     }
 
@@ -546,7 +574,7 @@ impl RequestBuilder {
         let mut endpoint_holder: Option<EndPoint> = None;
 
         let url = parse_url(&self.url);
-
+        
         let path = String::from(
             if url.is_ok() {
                 url.as_ref().unwrap().path()
@@ -580,6 +608,7 @@ impl RequestBuilder {
             params: self.params,
             body: self.body,
             factory: self.factory,
+            auth: self.auth,
             init_error
         }
     }
@@ -597,6 +626,7 @@ impl RequestBuilder {
 pub struct Session {
     config: HttpConfig,
     jar: Arc<Mutex<dyn CookieJar>>,
+    auth: Option<Arc<Mutex<dyn AuthManager>>>,
     factory: Arc<Mutex<ClientConnectionFactory>>
 }
 
@@ -605,75 +635,61 @@ impl Session {
     pub fn config(&self) -> &HttpConfig {
         &self.config
     }
-
-    /// Gets session's cookie jar
-    pub fn cookie_jar(&self) -> Arc<Mutex<dyn CookieJar>> {
-        self.jar.clone()
-    }
-
+  
    /// Creates a `CONNECT` request builder
    pub fn connect(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::CONNECT, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)   
     }
 
     /// Creates a `DELETE` request builder
     pub fn delete(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::DELETE, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)
 
     }
 
     /// Creates a `GET` request builder
     pub fn get(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::GET, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)  
     }
 
     /// Creates a `HEAD` request builder
     pub fn head(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::HEAD, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)
     }
 
     /// Creates a `OPTIONS` request builder
     pub fn options(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::OPTIONS, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)
     }
 
     /// Creates a `PATCH` request builder
     pub fn patch(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::PATCH, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)
     }
 
     /// Creates a `POST` request builder
     pub fn post(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::POST, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)
     }
 
     /// Creates a `PUT` request builder
     pub fn put(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::PUT, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)
     }
 
 
     /// Creates a `TRACE` request builder
     pub fn trace(&self, url: &str) -> RequestBuilder {
         RequestBuilder::new(HttpMethod::TRACE, url)
-        .config(&self.config)
-        .cookie_jar(self.jar.clone())
+        .session(self)
     }
 }
 
@@ -696,7 +712,8 @@ impl Session {
 /// 
 pub struct SessionBuilder {
     config: Option<HttpConfig>,
-    jar: Option<Arc<Mutex<dyn CookieJar>>>
+    jar: Option<Arc<Mutex<dyn CookieJar>>>,
+    auth: Option<Arc<Mutex<dyn AuthManager>>>
 }
 
 impl SessionBuilder {
@@ -705,7 +722,8 @@ impl SessionBuilder {
     pub fn new() -> SessionBuilder {
         SessionBuilder {
             config: None,
-            jar: None
+            jar: None,
+            auth: None
         }
     }
 
@@ -721,6 +739,11 @@ impl SessionBuilder {
         self
     }
 
+    pub fn auth(mut self, auth: Arc<Mutex<dyn AuthManager>>) -> SessionBuilder {
+        self.auth = Some(auth);
+        self
+    }
+
     /// `Session` Builder
     pub fn build(mut self) -> Session {
         if self.jar.is_none() {
@@ -732,8 +755,10 @@ impl SessionBuilder {
         }
         Session {
             config: self.config.unwrap(),
-            jar: self.jar.unwrap().clone(),
+            jar: self.jar.unwrap(),
+            auth: self.auth,
             factory: Arc::new(Mutex::new(ClientConnectionFactory::new()))
+
         }
     }
 }
@@ -794,6 +819,10 @@ pub struct Response {
     pub(crate) headers: HashMap<String, String>,
     /// Response cookies
     pub(crate) cookies: SetCookies,
+    /// Authorize headers in HTTP `401 Not Authorized` responses
+    pub(crate) auth: Vec<String>,
+    /// Proxy authorize headers in HTTP `401 Not Authorized` responses
+    pub(crate) proxy_auth: Vec<String>,
     /// Response body
     pub(crate) body: Vec<u8>
 }
@@ -807,6 +836,8 @@ impl Response {
             headers: HashMap::new(),
             cookies: SetCookies::new(),
             status_code: status,
+            auth: Vec::new(),
+            proxy_auth: Vec::new(),
             body: Vec::new()
         }
     }
@@ -824,6 +855,16 @@ impl Response {
     /// Get Request Cookies.
     pub fn cookie(&self) -> &SetCookies {
         &self.cookies
+    }
+
+    /// Get Request Authorization headers
+    pub fn auth(&self) -> Vec<&str> {
+        self.auth.iter().map(AsRef::as_ref).collect()
+    }
+
+    /// Get Request Proxy Authorization headers
+    pub fn proxy_auth(&self) -> Vec<&str> {
+        self.proxy_auth.iter().map(AsRef::as_ref).collect()
     }
 
     /// returns if the Response has body

@@ -509,11 +509,11 @@ fn test_session() {
     
     assert!(response1.is_ok());
 
-    let cookies1 = session.cookie_jar().lock().unwrap().active_cookies("en.wikipedia.org", "/", true);
+    let cookies1 = session.jar.lock().unwrap().active_cookies("en.wikipedia.org", "/", true);
 
     assert_eq!(cookies1.len(),1);
 
-    let cookies2 = session.cookie_jar().lock().unwrap().active_cookies("wikipedia.org", "/", true);
+    let cookies2 = session.jar.lock().unwrap().active_cookies("wikipedia.org", "/", true);
 
     assert_eq!(cookies2.len(),1);
  

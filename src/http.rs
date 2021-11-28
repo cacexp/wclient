@@ -33,6 +33,8 @@ use log::*;
 const HTTP_SCHEMA: &str = "http";
 const HTTPS_SCHEMA: &str = "https";
 const SET_COOKIE: &str = "set-cookie";
+const WWW_AUTHORIZE: &str = "www-authorize";
+const PROXY_AUTHORIZE: &str = "proxy-authorize";
 const CONTENT_LENGTH: &str = "Content-Length";
 const HTTP_1_1: &str = "HTTP/1.1";
 const HTTP_2_0: &str = "HTTP/2.0";
@@ -114,6 +116,12 @@ pub(crate) struct ClientConnection {
     transport: Box<dyn Transport>
 }
 
+lazy_static! { 
+    static ref EMTY_CHALLENGE: Vec<&'static str> =  {
+        Vec::new()
+    };
+}
+
 impl ClientConnection  {
 
     /// Client Connection constructor
@@ -136,7 +144,44 @@ impl ClientConnection  {
     }
 
     /// Sends a [Request](crate::Request) to the target server
-    pub(crate) fn send(&mut self, request: &Request) -> Result<Response, Error> {
+    pub(crate) fn send(&mut self, request: &mut Request) -> Result<Response, Error> {
+
+        if let Some(ref auth) = request.auth {
+            let mut mutex = auth.lock().unwrap();
+            if mutex.support_scheme("basic") {
+                if let Ok(headers) =mutex.authorization(request, &EMTY_CHALLENGE) {
+                    let request_headers = &mut request.headers;
+                    request_headers.extend(headers);
+                }
+
+            }
+        }
+        
+        self.write_request(request)?;
+
+        let mut response = self.receive(request)?;
+
+        // Check if not authorized
+        
+        if response.status_code == HTTP_401_UNAUTHORIZED && response.auth.len() > 0 && request.auth.is_some() {
+            let mut mutex =  request.auth.as_ref().unwrap().lock().unwrap();
+            let challenge = response.auth.iter().map(|s| {s.as_str()}).collect();
+            if let Ok(headers) = mutex.authorization(request, &challenge) {
+                let request_headers = &mut request.headers;
+                request_headers.extend(headers);
+            }
+
+            self.write_request(request)?;
+
+            response = self.receive(request)?;
+    
+        }
+
+        return Ok(response)
+
+    }
+
+    fn write_request(&mut self, request: &Request) -> Result<(), Error> {
         if ! self.transport.is_open() {
             return Err(Error::new(ErrorKind::NotConnected, "Connection is not open"));
         }
@@ -164,7 +209,7 @@ impl ClientConnection  {
             debug!("{}", string);
         }
 
-        return self.receive(request);
+        Ok(())
     }
 
     /// Close the connection
@@ -274,12 +319,17 @@ impl ClientConnection  {
 
                     let (key, value) = Self::parse_http11_header(trimmed)?;
                     let key_lc = key.to_lowercase();
-                    if key_lc == SET_COOKIE {
-                        let cookie = Cookie::parse(&value, host, path)?;
-                        response.cookies.push(cookie);
+                    match key_lc.as_str() {
+                        SET_COOKIE => {
+                            let cookie = Cookie::parse(&value, host, path)?;
+                            response.cookies.push(cookie);
+                        },
+                        WWW_AUTHORIZE => response.auth.push(value),
+                        PROXY_AUTHORIZE => response.proxy_auth.push(value),
+                        _ =>   {
+                            response.headers.insert(key, value);
+                        }
                     }
-
-                    response.headers.insert(key, value);
                 }
                 Err(e) => {
                     self.transport.close();
@@ -332,8 +382,8 @@ impl ClientConnection  {
         // Close connection if server requests it
         if response.headers.contains_key("Connection") && 
            response.headers.get("Connection").unwrap() == "close" {
-               self.transport.close();
-           }
+            self.transport.close();
+        }
 
         return Ok(response);
     }
