@@ -239,7 +239,7 @@ impl ClientConnection  {
         if endpoint.default {
             write!(writer, "Host: {}\r\n", &endpoint.host)?;
         } else {
-            write!(writer, "Host: {:?}:{:?}\r\n", &endpoint.host, endpoint.port)?;
+            write!(writer, "Host: {}:{}\r\n", &endpoint.host, endpoint.port)?;
         }
     
         if request.cookies.len() > 0 {
