@@ -4,7 +4,6 @@
 //! in `401 Not Authenticated' HTTP responses:
 //! 
 //! * [crate::auth::HttpBasicAuth] that generates `Authenticate: Basic ...` headers for a news authenticated request
-//! * [crate::auth::HttpDigestAuth] that generates `Authenticate: Digest ...` headers for a news authenticated request
 
 use crate::Request;
 use std::io::{Error, ErrorKind};

@@ -185,9 +185,26 @@
 //!     .build();
 //! 
 //! let response = request.send();
+//! ```
 //! 
-//!  ```
+//! ## Authorization
 //! 
+//! [RFC 7235](https://www.rfc-editor.org/rfc/rfc7235.html#section-4.1) defines the `WWW-Authenticate` response header where 
+//! a server is requesting the client to authenticate the request. The [AuthManager](crate::auth::AuthManager) trait defines
+//! the functions to process these kind of authenticate headers and generate the proper headers(typically an `Authorization` header).
+//! 
+//! `wclient`provides [HttpBasicAuth](crate::auth::HttpBasicAuth) implementation of `AuthManager` trait for `Basic` authentication 
+//! which uses a base64 encoded `user:password` as header:
+//! 
+//!  `Authorization: Basic YW55IGNhcm5hbCBwbGVhc3U=` 
+//! 
+//! The `SessionBuilder` and `RequestBuilder` have a method 'auth' to set an `AuthManage`. The `AuthManager` has to be contained
+//! in a thread-safe `Arc` ref-counter and inside a `Mutex`:
+//! 
+//! ```no_run
+//!  
+//! 
+//! ```
 
 #![allow(dead_code)]
 
