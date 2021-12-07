@@ -204,6 +204,8 @@
 //! 
 //! ```no_run
 //!  use wclient::auth::HttpBasicAuth;
+//!  use wclient::RequestBuilder;
+//!  use std::sync::{Arc, Mutex}; 
 //! 
 //!  let manager = Arc::new(Mutex::new(HttpBasicAuth::new("wclient", "user,1234")));
 //!
