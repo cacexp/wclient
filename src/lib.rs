@@ -17,7 +17,6 @@
 //! 
 //! It allows to send HTTP requests and receive the responses.
 //! 
-//! **Note**: This is a MVP implementation
 //! 
 //! # Features
 //! * HTTP 1.1 [Request](crate::Request) and [Response](crate::Response) over plain TCP/IP and TLS
@@ -27,6 +26,8 @@
 //! * HTTPS custom site certificate validation (local directory or certificate chain) in *.pem format
 //! * HTTPS client certificate authentication
 //! * HTTP Connection pooling
+//! * [AuthManager](crate::auth::AuthManager) trait fo authenticating requests (`Athentication` header)
+//! * [HttpBasicAuth](crate::auth::HttpBasicAuth) for `Athentication: Basic`
 //!
 //! # Future Features
 //! * Multipart
