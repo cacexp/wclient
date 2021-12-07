@@ -20,7 +20,7 @@
 //! 
 //! # Features
 //! * HTTP 1.1 [Request](crate::Request) and [Response](crate::Response) over plain TCP/IP and TLS
-//! //! * HTTP [Session](crate::Session) to share configuration and a cookie jar among requests
+//! * HTTP [Session](crate::Session) to share configuration and a cookie jar among requests
 //! * HTTP 1.1 Single Body
 //! * HTTPS (v1.1) with default site certificate verification (only with host CA certificates)
 //! * HTTPS custom site certificate validation (local directory or certificate chain) in *.pem format
