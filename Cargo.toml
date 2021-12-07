@@ -8,7 +8,7 @@ readme="README.md"
 description = "wclient is a lightweight HTTP client library written in Rust."
 homepage = "https://github.com/cacexp/wclient"
 repository = "https://github.com/cacexp/wclient"
-documentation = "https://docs.rs/wclient/0.1.4/wclient/"
+documentation = "https://docs.rs/wclient/0.1.5/wclient/"
 categories = ["network-programming", "web-programming::http-client"]
 # Ignore files used in tests
 exclude = ["/test_resources"]
