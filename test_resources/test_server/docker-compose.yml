@@ -1,9 +1,24 @@
-web:
-  image: test-nginx  
-  ports:
-   - "4443:443"
-   - "4444:444"
-echo:
-  image: mendhak/http-https-echo
-  ports:
-  - "8080:80"
+version: "2"
+
+services:
+  echo:
+    image: mendhak/http-https-echo
+    ports:
+    - "8080:80"
+  nginx:
+    image: wclient-nginx
+    container_name: wclient-nginx
+    hostname: wclient-nginx
+    build: ./nginx
+    ports:
+    - "4443:443"
+    - "4444:444"
+  django:
+    image: wclient-django
+    container_name: wclient-django
+    hostname: wclient-nginx
+    build: ./django
+    environment:
+      - PORT=80
+    ports:
+    - "8000:80"

@@ -1,6 +1,6 @@
 //! HTTP Authentication module
 //! 
-//! This module defines the [crate::auth::AuthManage] and some implementations to deal with `WWW-Authenticate" header
+//! This module defines the [crate::auth::AuthManager] and some implementations to deal with `WWW-Authenticate" header
 //! in `401 Not Authenticated' HTTP responses:
 //! 
 //! * [crate::auth::HttpBasicAuth] that generates `Authenticate: Basic ...` headers for a news authenticated request
@@ -88,6 +88,12 @@ impl AuthManager for HttpBasicAuth {
 }
 
 impl HttpBasicAuth {
+    pub fn new(user: &str, password: &str) -> HttpBasicAuth {
+        HttpBasicAuth{
+            user: String::from(user),
+            password: String::from(password)
+        }
+    }
     fn basic_scheme_requested(challenges: &Vec<& str>) -> bool {
         for value in challenges {
             if let Ok(_) = BasicChallenge::from_str(value) {

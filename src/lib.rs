@@ -202,9 +202,17 @@
 //! in a thread-safe `Arc` ref-counter and inside a `Mutex`:
 //! 
 //! ```no_run
-//!  
+//!  use wclient::auth::HttpBasicAuth;
+//! 
+//!  let manager = Arc::new(Mutex::new(HttpBasicAuth::new("wclient", "user,1234")));
+//!
+//!  let mut request = RequestBuilder::get("http://localhost:8000/users/12/")
+//!                    .auth(manager)
+//!                    .build();
+//!  let response = request.send();
 //! 
 //! ```
+//! 
 
 #![allow(dead_code)]
 

@@ -1,0 +1,12 @@
+env
+venv
+Dockerfile
+.gitignore
+*.pyc
+*.pyo
+*.mo
+*.db
+*.css.map
+*.egg-info
+.cache
+__pycache__

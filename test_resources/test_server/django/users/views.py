@@ -18,3 +18,16 @@ class UserView(APIView):
         response = JsonResponse(data, status=200)
         response.set_cookie("was_here", "Yesyou", expires="Wed, 15-Nov-23 09:13:29 GMT")
         return response
+
+
+class AuthView(APIView):
+    
+    content_type="application/json"
+
+    @csrf_exempt
+    def get(self, request, format=None):
+        data = {
+            "auth": "Basic",
+        }
+        response = JsonResponse(data, status=200)
+        return response

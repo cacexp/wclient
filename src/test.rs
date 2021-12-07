@@ -239,7 +239,7 @@ fn request_boreapy_with_config(config: &HttpConfig) -> Result<Response, Error> {
 }
 
 fn request_local_with_config(config: &HttpConfig) -> Result<Response, Error> {
-    return RequestBuilder::get("https://localhost:4443/user.json")
+    return RequestBuilder::get("https://localhost:4443/auth/auth.json")
         .header(ACCEPT, "*/*")
         .config(&config)
         .build()        
@@ -302,7 +302,7 @@ fn http_local_ok(result: Result<Response, Error>) {
 
     let result_data = result_json.unwrap();
 
-    assert!(result_data.has_key("name"));
+    assert!(result_data.has_key("auth"));
 
 }
 
@@ -379,11 +379,7 @@ fn test_https_custom_server_ca_file2() {
 fn test_https_client_cert1() {
 
     init();
-/*
-    let mut ca_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    ca_path.push("test_resources/test-ca/ca.crt");
-    let ca = String::from(ca_path.to_str().unwrap());
-*/
+
     let mut cert_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     cert_path.push("test_resources/test-ca/full_client.crt");
 
@@ -394,7 +390,6 @@ fn test_https_client_cert1() {
 
     let key = String::from(key_path.to_str().unwrap());
     let config = HttpConfigBuilder::default()
- //       .verify(HttpsVerify::Path(ca))
         .cert(HttpsCert::CertKey{cert,key})
         .build();
 
@@ -543,4 +538,83 @@ fn test_session_connections1() {
     let response2 = request2.send();
     
     assert!(response2.is_ok());
+}
+
+#[test]
+ fn test_basic_auth_1() {
+     init();
+     let manager = Arc::new(Mutex::new(crate::auth::HttpBasicAuth::new("wclient", "user,1234")));
+     let mut request = RequestBuilder::get("http://localhost:8000/users/12/")
+        .auth(manager)
+        .build();
+
+     let response = request.send();
+
+     assert!(response.is_ok());
+
+     let not_auth = response.unwrap();
+
+     assert_eq!(not_auth.status_code(), 200);
+
+ }
+
+ #[test]
+ fn test_session_basic_auth_1() {
+    init();
+    let mut ca_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    ca_path.push("test_resources/test-ca/ca.crt");
+    let ca = String::from(ca_path.to_str().unwrap());
+
+    let config = HttpConfigBuilder::default()
+        .verify(HttpsVerify::Path(ca))
+        .build();
+
+     let manager = Arc::new(Mutex::new(crate::auth::HttpBasicAuth::new("wclient", "user,1234")));
+
+     let session = SessionBuilder::new()
+        .auth(manager)
+        .config(&config)
+        .build(); 
+
+     let mut request = session.get("https://localhost:4443/users/12/").build();
+
+     let response = request.send();
+
+     assert!(response.is_ok());
+
+     let not_auth = response.unwrap();
+
+     assert_eq!(not_auth.status_code(), 200);
+
+ }
+
+ #[test]
+ fn test_basic_auth_err_1() {
+     let mut request = RequestBuilder::get("http://localhost:8000/users/12/").build();
+     let response = request.send();
+
+     assert!(response.is_ok());
+
+     let not_auth = response.unwrap();
+
+     assert_eq!(not_auth.status_code(), 401);
+
+ }
+
+#[test]
+fn test_basic_wrong_2() {
+    let manager = Arc::new(Mutex::new(crate::auth::HttpBasicAuth::new("wclient", "1234")));
+
+    let mut request = RequestBuilder::get("http://localhost:8000/users/12/")
+        .auth(manager.clone())
+        .build();
+
+    let response = request.send();
+
+    assert!(response.is_ok());
+
+    let not_auth = response.unwrap();
+
+    assert_eq!(not_auth.status_code(), 401);
+
 }
