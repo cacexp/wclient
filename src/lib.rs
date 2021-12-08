@@ -78,7 +78,7 @@
 //!    surname: "Smith"
 //! };
 //! 
-//! let mut request = RequestBuilder::post("Http://web.myservice.com/user")
+//! let mut request = RequestBuilder::post("http://web.myservice.com/user")
 //!     .header("Accept", "application/json")
 //!     .param("id", "12345")
 //!     .json(&data)
@@ -430,10 +430,11 @@ pub struct RequestBuilder {
 
 impl RequestBuilder {
     /// Default constructor
-    pub fn new(method: HttpMethod, url: &str) -> RequestBuilder {
+    pub fn new<S>(method: HttpMethod, url: S) -> RequestBuilder 
+        where S : Into<String> {
         RequestBuilder {
             method,
-            url: String::from(url),
+            url: url.into(),
             config: HttpConfigBuilder::default().build(),
             headers: CaseInsensitiveHashMap::new(),
             jar: None,
@@ -446,47 +447,56 @@ impl RequestBuilder {
     }
 
     /// Creates a `CONNECT` request builder
-    pub fn connect(url: &str) -> RequestBuilder {
+    pub fn connect<S>(url: S) -> RequestBuilder 
+        where S : Into<String> {
         Self::new(HttpMethod::CONNECT, url)
     }
 
     /// Creates a `DELETE` request builder
-    pub fn delete(url: &str) -> RequestBuilder {
+    pub fn delete<S>(url: S) -> RequestBuilder 
+    where S : Into<String> {
         Self::new(HttpMethod::DELETE, url)
     }
 
     /// Creates a `GET` request builder
-    pub fn get(url: &str) -> RequestBuilder {
+    pub fn get<S>(url: S) -> RequestBuilder 
+    where S : Into<String> {
         Self::new(HttpMethod::GET, url)
     }
 
     /// Creates a `HEAD` request builder
-    pub fn head(url: &str) -> RequestBuilder {
+    pub fn head<S>(url: S) -> RequestBuilder 
+    where S : Into<String>  {
         Self::new(HttpMethod::HEAD, url)
     }
 
     /// Creates a `OPTIONS` request builder
-    pub fn options(url: &str) -> RequestBuilder {
+    pub fn options<S>(url: S) -> RequestBuilder 
+    where S : Into<String> {
         Self::new(HttpMethod::OPTIONS, url)
     }
 
     /// Creates a `PATCH` request builder
-    pub fn patch(url: &str) -> RequestBuilder {
+    pub fn patch<S>(url: S) -> RequestBuilder 
+    where S : Into<String> {
         Self::new(HttpMethod::PATCH, url)
     }
 
     /// Creates a `POST` request builder
-    pub fn post(url: &str) -> RequestBuilder {
+    pub fn post<S>(url: S) -> RequestBuilder 
+    where S : Into<String> {
         Self::new(HttpMethod::POST, url)
     }
 
     /// Creates a `PUT` request builder
-    pub fn put(url: &str) -> RequestBuilder {
+    pub fn put<S>(url: S) -> RequestBuilder 
+    where S : Into<String> {
         Self::new(HttpMethod::PUT, url)
     }
     
     /// Creates a `TRACE` request builder
-    pub fn trace(url: &str) -> RequestBuilder {
+    pub fn trace<S>(url: S) -> RequestBuilder 
+    where S : Into<String> {
         Self::new(HttpMethod::TRACE, url)
     }
 
@@ -510,8 +520,9 @@ impl RequestBuilder {
     /// it is overrriden. 
     ///
     /// **Note**: header names are case-insensitive.
-    pub fn header(mut self, name: &str, value: &str) -> RequestBuilder {
-        self.headers.insert(String::from(name), String::from(value));
+    pub fn header<S>(mut self, name: S, value: S) -> RequestBuilder 
+    where S : Into<String> {
+        self.headers.insert(name.into(), value.into());
         self
     }
 
@@ -528,8 +539,9 @@ impl RequestBuilder {
     /// it is overrriden. 
     ///
     /// **Note**: parameter names are case-sensitive.
-    pub fn param(mut self, name: &str, value: &str) -> RequestBuilder {
-        self.params.insert(String::from(name), String::from(value));
+    pub fn param<S>(mut self, name: S, value: S) -> RequestBuilder 
+    where S : Into<String> {
+        self.params.insert(name.into(), value.into());
         self
     }
 
@@ -546,8 +558,9 @@ impl RequestBuilder {
     /// it is overrriden. 
     ///
     /// **Note**: cookie names are case-sensitive.
-    pub fn cookie(mut self, name: &str, value: &str) -> RequestBuilder {
-        self.cookies.insert(String::from(name), String::from(value));
+    pub fn cookie<S>(mut self, name: S, value: S) -> RequestBuilder 
+    where S : Into<String> {
+        self.cookies.insert(name.into(), value.into());
         self
     }
 
@@ -665,57 +678,66 @@ impl Session {
     }
   
    /// Creates a `CONNECT` request builder
-   pub fn connect(&self, url: &str) -> RequestBuilder {
+   pub fn connect<S>(&self, url: S) -> RequestBuilder 
+   where S: Into<String> {
         RequestBuilder::new(HttpMethod::CONNECT, url)
         .session(self)   
     }
 
     /// Creates a `DELETE` request builder
-    pub fn delete(&self, url: &str) -> RequestBuilder {
+    pub fn delete<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String>  {
         RequestBuilder::new(HttpMethod::DELETE, url)
         .session(self)
 
     }
 
     /// Creates a `GET` request builder
-    pub fn get(&self, url: &str) -> RequestBuilder {
+    pub fn get<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String> {
         RequestBuilder::new(HttpMethod::GET, url)
         .session(self)  
     }
 
     /// Creates a `HEAD` request builder
-    pub fn head(&self, url: &str) -> RequestBuilder {
+    pub fn head<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String> {
         RequestBuilder::new(HttpMethod::HEAD, url)
         .session(self)
     }
 
     /// Creates a `OPTIONS` request builder
-    pub fn options(&self, url: &str) -> RequestBuilder {
+    pub fn options<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String> {
         RequestBuilder::new(HttpMethod::OPTIONS, url)
         .session(self)
     }
 
     /// Creates a `PATCH` request builder
-    pub fn patch(&self, url: &str) -> RequestBuilder {
+    pub fn patch<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String> {
         RequestBuilder::new(HttpMethod::PATCH, url)
         .session(self)
     }
 
     /// Creates a `POST` request builder
-    pub fn post(&self, url: &str) -> RequestBuilder {
+    pub fn post<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String> {
         RequestBuilder::new(HttpMethod::POST, url)
         .session(self)
     }
 
     /// Creates a `PUT` request builder
-    pub fn put(&self, url: &str) -> RequestBuilder {
+    pub fn put<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String> {
         RequestBuilder::new(HttpMethod::PUT, url)
         .session(self)
     }
 
 
     /// Creates a `TRACE` request builder
-    pub fn trace(&self, url: &str) -> RequestBuilder {
+    pub fn trace<S>(&self, url: S) -> RequestBuilder 
+    where S: Into<String> {
         RequestBuilder::new(HttpMethod::TRACE, url)
         .session(self)
     }
